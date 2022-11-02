@@ -1416,7 +1416,7 @@ class RawPcapNgReader(RawPcapReader):
     PacketMetadata = collections.namedtuple("PacketMetadataNg",  # type: ignore
                                             ["linktype", "tsresol",
                                              "tshigh", "tslow", "wirelen",
-                                             "comment"])
+                                             "comment", "custom"])
 
     def __init__(self, filename, fdesc=None, magic=None):  # type: ignore
         # type: (str, IO[bytes], bytes) -> None
@@ -1538,6 +1538,11 @@ class RawPcapNgReader(RawPcapReader):
                     warning("PcapNg: invalid comment option")
                     break
                 opts["comment"] = comment[:newline_index]
+            if (code == 2988 or code ==2989 or code == 19372 or code == 19373) and length >= 1 and 4 + length < len(options):
+                warning("PcapNg: code %d found length %d for end-of-option" % (code,length))  # noqa: E501
+                custom = options[4:4 + length]
+                opts["custom"] = custom
+                break
             if code == 0:
                 if length != 0:
                     warning("PcapNg: invalid option length %d for end-of-option" % length)  # noqa: E501
@@ -1592,6 +1597,7 @@ class RawPcapNgReader(RawPcapReader):
         # Parse options
         options = self._read_options(block[opt_offset:])
         comment = options.get("comment", None)
+        custom = options.get("custom", None)
 
         self._check_interface_id(intid)
 
@@ -1601,7 +1607,8 @@ class RawPcapNgReader(RawPcapReader):
                                                tshigh=tshigh,
                                                tslow=tslow,
                                                wirelen=wirelen,
-                                               comment=comment))
+                                               comment=comment,
+                                               custom=custom))
 
     def _read_block_spb(self, block, size):
         # type: (bytes, int) -> Tuple[bytes, RawPcapNgReader.PacketMetadata]
