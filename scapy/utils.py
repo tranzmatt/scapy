@@ -1531,6 +1531,7 @@ class RawPcapNgReader(RawPcapReader):
         # type: (bytes) -> Dict[str, Any]
         """Section Header Block"""
         opts = self.default_options.copy()  # type: Dict[str, Any]
+        opts["custom"] = []
         while len(options) >= 4:
             code, length = struct.unpack(self.endian + "HH", options[:4])
             # PCAP Next Generation (pcapng) Capture File Format
@@ -1549,9 +1550,9 @@ class RawPcapNgReader(RawPcapReader):
                     break
                 opts["comment"] = comment[:newline_index]
             if (code == 2988 or code ==2989 or code == 19372 or code == 19373) and length >= 1 and 4 + length < len(options):
-                warning("PcapNg: code %d found length %d for end-of-option" % (code,length))  # noqa: E501
-                custom = options[4:4 + length]
-                opts["custom"] = custom
+                custom_payload = options[4:4 + length]
+                custom_field = { 'code' : code, 'length': len(custom_payload), 'payload' : custom_payload }
+                opts["custom"].append(custom_field)
                 break
             if code == 0:
                 if length != 0:
@@ -1642,7 +1643,8 @@ class RawPcapNgReader(RawPcapReader):
                                                tshigh=None,
                                                tslow=None,
                                                wirelen=wirelen,
-                                               comment=None))
+                                               comment=None,
+                                               custom=None))
 
     def _read_block_pkt(self, block, size):
         # type: (bytes, int) -> Tuple[bytes, RawPcapNgReader.PacketMetadata]
@@ -1663,7 +1665,8 @@ class RawPcapNgReader(RawPcapReader):
                                                tshigh=tshigh,
                                                tslow=tslow,
                                                wirelen=wirelen,
-                                               comment=None))
+                                               comment=None,
+                                               custom=None))
 
     def _read_block_dsb(self, block, size):
         # type: (bytes, int) -> None
@@ -1735,7 +1738,7 @@ class PcapNgReader(RawPcapNgReader, PcapReader, _SuperSocket):
         rp = super(PcapNgReader, self)._read_packet(size=size)
         if rp is None:
             raise EOFError
-        s, (linktype, tsresol, tshigh, tslow, wirelen, comment) = rp
+        s, (linktype, tsresol, tshigh, tslow, wirelen, comment, custom) = rp
         try:
             cls = conf.l2types.num2layer[linktype]  # type: Type[Packet]
             p = cls(s)  # type: Packet
@@ -1752,6 +1755,7 @@ class PcapNgReader(RawPcapNgReader, PcapReader, _SuperSocket):
             p.time = EDecimal((tshigh << 32) + tslow) / tsresol
         p.wirelen = wirelen
         p.comment = comment
+        p.custom = custom
         return p
 
     def recv(self, size=MTU):

@@ -94,7 +94,8 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         "direction", "sniffed_on",
         # handle snaplen Vs real length
         "wirelen",
-        "comment"
+        "comment",
+        "custom"
     ]
     name = None
     fields_desc = []  # type: Sequence[AnyField]
@@ -161,6 +162,7 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         self.direction = None  # type: Optional[int]
         self.sniffed_on = None  # type: Optional[_GlobInterfaceType]
         self.comment = None  # type: Optional[bytes]
+        self.custom = None  # type: Optional[bytes]
         if _pkt:
             self.dissect(_pkt)
             if not _internal:
@@ -211,7 +213,8 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
             self.direction,
             self.sniffed_on,
             self.wirelen,
-            self.comment
+            self.comment,
+            self.custom
         ))
 
     def __setstate__(self, state):
@@ -223,6 +226,7 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         self.sniffed_on = state[3]
         self.wirelen = state[4]
         self.comment = state[5]
+        self.custom = state[6]
         return self
 
     def __deepcopy__(self,
@@ -413,6 +417,7 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         clone.payload.add_underlayer(clone)
         clone.time = self.time
         clone.comment = self.comment
+        clone.custom = self.custom
         return clone
 
     def _resolve_alias(self, attr):
@@ -1093,6 +1098,7 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         )
         pkt.wirelen = self.wirelen
         pkt.comment = self.comment
+        pkt.custom = self.custom
         if payload is not None:
             pkt.add_payload(payload)
         return pkt
