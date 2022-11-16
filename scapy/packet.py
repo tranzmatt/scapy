@@ -37,6 +37,9 @@ from scapy.fields import (
     RawVal,
     StrField,
 )
+
+from scapy.consts import OPT_COMMENT, OPT_CUSTOM_STR_SAFE, OPT_CUSTOM_BYTES_SAFE, \
+    OPT_CUSTOM_STR_UNSAFE, OPT_CUSTOM_BYTES_UNSAFE
 from scapy.config import conf, _version_checker
 from scapy.compat import raw, orb, bytes_encode
 from scapy.base_classes import BasePacket, Gen, SetGen, Packet_metaclass, \
@@ -97,6 +100,12 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         "comment",
         "custom"
     ]
+
+    opt_custom_codes = [OPT_CUSTOM_STR_SAFE, OPT_CUSTOM_BYTES_SAFE, OPT_CUSTOM_STR_UNSAFE, OPT_CUSTOM_BYTES_UNSAFE]
+
+    #KISMET_PEN = 55922
+    #KISMET_GPS_MAGIC = 0x47
+
     name = None
     fields_desc = []  # type: Sequence[AnyField]
     deprecated_fields = {}  # type: Dict[str, Tuple[str, str]]

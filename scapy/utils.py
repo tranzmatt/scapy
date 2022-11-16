@@ -10,8 +10,6 @@ General utility functions.
 from __future__ import absolute_import
 from __future__ import print_function
 
-from decimal import Decimal
-
 import array
 import collections
 import decimal
@@ -29,18 +27,11 @@ import tempfile
 import threading
 import time
 import warnings
+from decimal import Decimal
 
-import scapy.libs.six as six
 from scapy.libs.six.moves import range, input, zip_longest
 
-from scapy.config import conf
-from scapy.consts import DARWIN, OPENBSD, WINDOWS
-from scapy.data import MTU, DLT_EN10MB
-from scapy.compat import orb, plain_str, chb, bytes_base64,\
-    base64_bytes, hex_bytes, lambda_tuple_converter, bytes_encode
-from scapy.error import log_runtime, Scapy_Exception, warning
-from scapy.pton_ntop import inet_pton
-
+import scapy.libs.six as six
 # Typing imports
 from scapy.compat import (
     cast,
@@ -59,6 +50,15 @@ from scapy.compat import (
     Union,
     overload,
 )
+from scapy.compat import orb, plain_str, chb, bytes_base64, \
+    base64_bytes, hex_bytes, lambda_tuple_converter, bytes_encode
+from scapy.config import conf
+from scapy.consts import DARWIN, OPENBSD, WINDOWS, OPT_COMMENT, \
+    OPT_CUSTOM_STR_SAFE, OPT_CUSTOM_BYTES_SAFE, OPT_CUSTOM_STR_UNSAFE, \
+    OPT_CUSTOM_BYTES_UNSAFE
+from scapy.data import MTU, DLT_EN10MB
+from scapy.error import log_runtime, Scapy_Exception, warning
+from scapy.pton_ntop import inet_pton
 
 if TYPE_CHECKING:
     from scapy.packet import Packet
@@ -1530,6 +1530,7 @@ class RawPcapNgReader(RawPcapReader):
     def _read_options(self, options):
         # type: (bytes) -> Dict[str, Any]
         """Section Header Block"""
+        opt_custom_codes = [OPT_CUSTOM_STR_SAFE, OPT_CUSTOM_BYTES_SAFE, OPT_CUSTOM_STR_UNSAFE, OPT_CUSTOM_BYTES_UNSAFE]
         opts = self.default_options.copy()  # type: Dict[str, Any]
         opts["custom"] = []
         while len(options) >= 4:
@@ -1542,16 +1543,16 @@ class RawPcapNgReader(RawPcapReader):
                 opts["tsresol"] = (2 if tsresol & 128 else 10) ** (
                     tsresol & 127
                 )
-            if code == 1 and length >= 1 and 4 + length < len(options):
+            if code == OPT_COMMENT and length >= 1 and 4 + length < len(options):
                 comment = options[4:4 + length]
                 newline_index = comment.find(b"\n")
                 if newline_index == -1:
                     warning("PcapNg: invalid comment option")
                     break
                 opts["comment"] = comment[:newline_index]
-            if (code == 2988 or code ==2989 or code == 19372 or code == 19373) and length >= 1 and 4 + length < len(options):
+            if (code in opt_custom_codes and length >= 1 and 4 + length < len(options)):
                 custom_payload = options[4:4 + length]
-                custom_field = { 'code' : code, 'length': len(custom_payload), 'payload' : custom_payload }
+                custom_field = {'code': code, 'length': len(custom_payload), 'payload': custom_payload}
                 opts["custom"].append(custom_field)
                 break
             if code == 0:
