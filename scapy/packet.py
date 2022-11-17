@@ -103,9 +103,6 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
 
     opt_custom_codes = [OPT_CUSTOM_STR_SAFE, OPT_CUSTOM_BYTES_SAFE, OPT_CUSTOM_STR_UNSAFE, OPT_CUSTOM_BYTES_UNSAFE]
 
-    #KISMET_PEN = 55922
-    #KISMET_GPS_MAGIC = 0x47
-
     name = None
     fields_desc = []  # type: Sequence[AnyField]
     deprecated_fields = {}  # type: Dict[str, Tuple[str, str]]

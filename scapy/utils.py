@@ -1547,17 +1547,13 @@ class RawPcapNgReader(RawPcapReader):
                 comment = options[4:4 + length]
                 newline_index = comment.find(b"\n")
                 if newline_index == -1:
-                    #warning("PcapNg: invalid comment option")
                     opts["comment"] = comment + b"\n"
                 else:
                     opts["comment"] = comment[:newline_index]
-                #print("Comment {}".format(opts["comment"], file=sys.stderr))
-            if (code in opt_custom_codes and length >= 1 and 4 + length < len(options)):
+            if code in opt_custom_codes and length >= 1 and 4 + length < len(options):
                 custom_payload = options[4:4 + length]
                 custom_field = {"code": code, "length": len(custom_payload), "payload": custom_payload}
                 opts["custom"].append(custom_field)
-                #print("Payload {}".format(custom_field["payload"].hex()), file=sys.stderr)
-                #print("Custom {}".format(opts["custom"], file=sys.stderr))
                 break
             if code == 0:
                 if length != 0:
