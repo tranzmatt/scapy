@@ -14,13 +14,14 @@ m = sa.encap(p)
 assert m.type == ETH_P_MACSEC
 assert m[MACsec].type == ETH_P_IP
 assert len(m) == len(p) + 16
-assert m[MACsec].an == 0
-assert m[MACsec].pn == 100
-assert m[MACsec].shortlen == 0
+assert m[MACsec].AN == 0
+assert m[MACsec].PN == 100
+assert m[MACsec].SL == 0
 assert m[MACsec].SC
 assert m[MACsec].E
 assert m[MACsec].C
-assert m[MACsec].sci == b'\x52\x54\x00\x13\x01\x56\x00\x01'
+assert m[MACsec].SCI == b'\x52\x54\x00\x13\x01\x56\x00\x01'
+assert m[MACsec].mysummary() == r"AN=0, PN=100, SCI='RT\x00\x13\x01V\x00\x01', IPv4"
 
 = MACsec - basic encryption - encrypted
 sa = MACsecSA(sci=b'\x52\x54\x00\x13\x01\x56\x00\x01', an=0, pn=100, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=1, send_sci=1)
@@ -30,13 +31,13 @@ e = sa.encrypt(m)
 assert e.type == ETH_P_MACSEC
 assert e[MACsec].type == None
 assert len(e) == len(p) + 16 + 16
-assert e[MACsec].an == 0
-assert e[MACsec].pn == 100
-assert e[MACsec].shortlen == 0
+assert e[MACsec].AN == 0
+assert e[MACsec].PN == 100
+assert e[MACsec].SL == 0
 assert e[MACsec].SC
 assert e[MACsec].E
 assert e[MACsec].C
-assert e[MACsec].sci == b'\x52\x54\x00\x13\x01\x56\x00\x01'
+assert e[MACsec].SCI == b'\x52\x54\x00\x13\x01\x56\x00\x01'
 
 = MACsec - basic decryption - encrypted
 sa = MACsecSA(sci=b'\x52\x54\x00\x13\x01\x56\x00\x01', an=0, pn=100, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=1, send_sci=1)
@@ -47,13 +48,13 @@ d = sa.decrypt(e)
 assert d.type == ETH_P_MACSEC
 assert d[MACsec].type == ETH_P_IP
 assert len(d) == len(m)
-assert d[MACsec].an == 0
-assert d[MACsec].pn == 100
-assert d[MACsec].shortlen == 0
+assert d[MACsec].AN == 0
+assert d[MACsec].PN == 100
+assert d[MACsec].SL == 0
 assert d[MACsec].SC
 assert d[MACsec].E
 assert d[MACsec].C
-assert d[MACsec].sci == b'\x52\x54\x00\x13\x01\x56\x00\x01'
+assert d[MACsec].SCI == b'\x52\x54\x00\x13\x01\x56\x00\x01'
 assert raw(d) == raw(m)
 
 = MACsec - basic decap - decrypted
@@ -74,13 +75,13 @@ m = sa.encap(p)
 assert m.type == ETH_P_MACSEC
 assert m[MACsec].type == ETH_P_IP
 assert len(m) == len(p) + 16
-assert m[MACsec].an == 0
-assert m[MACsec].pn == 200
-assert m[MACsec].shortlen == 0
+assert m[MACsec].AN == 0
+assert m[MACsec].PN == 200
+assert m[MACsec].SL == 0
 assert m[MACsec].SC
 assert not m[MACsec].E
 assert not m[MACsec].C
-assert m[MACsec].sci == b'\x52\x54\x00\x13\x01\x56\x00\x01'
+assert m[MACsec].SCI == b'\x52\x54\x00\x13\x01\x56\x00\x01'
 
 = MACsec - basic encryption - integrity only
 sa = MACsecSA(sci=b'\x52\x54\x00\x13\x01\x56\x00\x01', an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
@@ -90,13 +91,13 @@ e = sa.encrypt(m)
 assert m.type == ETH_P_MACSEC
 assert e[MACsec].type == None
 assert len(e) == len(p) + 16 + 16
-assert e[MACsec].an == 0
-assert e[MACsec].pn == 200
-assert e[MACsec].shortlen == 0
+assert e[MACsec].AN == 0
+assert e[MACsec].PN == 200
+assert e[MACsec].SL == 0
 assert e[MACsec].SC
 assert not e[MACsec].E
 assert not e[MACsec].C
-assert e[MACsec].sci == b'\x52\x54\x00\x13\x01\x56\x00\x01'
+assert e[MACsec].SCI == b'\x52\x54\x00\x13\x01\x56\x00\x01'
 assert raw(e)[:-16] == raw(m)
 
 = MACsec - basic decryption - integrity only
@@ -108,13 +109,13 @@ d = sa.decrypt(e)
 assert d.type == ETH_P_MACSEC
 assert d[MACsec].type == ETH_P_IP
 assert len(d) == len(m)
-assert d[MACsec].an == 0
-assert d[MACsec].pn == 200
-assert d[MACsec].shortlen == 0
+assert d[MACsec].AN == 0
+assert d[MACsec].PN == 200
+assert d[MACsec].SL == 0
 assert d[MACsec].SC
 assert not d[MACsec].E
 assert not d[MACsec].C
-assert d[MACsec].sci == b'\x52\x54\x00\x13\x01\x56\x00\x01'
+assert d[MACsec].SCI == b'\x52\x54\x00\x13\x01\x56\x00\x01'
 assert raw(d) == raw(m)
 
 = MACsec - basic decap - integrity only
@@ -130,71 +131,71 @@ assert raw(r) == raw(p)
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')
 m = sa.encap(p)
-assert m[MACsec].shortlen == 2
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 2
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 10
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 8)
 m = sa.encap(p)
-assert m[MACsec].shortlen == 10
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 10
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 18
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 16)
 m = sa.encap(p)
-assert m[MACsec].shortlen == 18
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 18
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 32
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 30)
 m = sa.encap(p)
-assert m[MACsec].shortlen == 32
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 32
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 40
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 38)
 m = sa.encap(p)
-assert m[MACsec].shortlen == 40
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 40
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 47
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 45)
 m = sa.encap(p)
-assert m[MACsec].shortlen == 47
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 47
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 0 (48)
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=1)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 45 + "y")
 m = sa.encap(p)
-assert m[MACsec].shortlen == 0
+assert m[MACsec].SL == 0
 
 
 = MACsec - encap - shortlen 2/nosci
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=0)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')
 m = sa.encap(p)
-assert m[MACsec].shortlen == 2
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 2
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 32/nosci
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=0)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 30)
 m = sa.encap(p)
-assert m[MACsec].shortlen == 32
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 32
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 = MACsec - encap - shortlen 47/nosci
 sa = MACsecSA(sci=0x5254001301560001, an=0, pn=200, key=b'aaaaaaaaaaaaaaaa', icvlen=16, encrypt=0, send_sci=0)
 p = Ether(src='aa:aa:aa:bb:bb:bb', dst='cc:cc:cc:dd:dd:dd')/Raw("x" * 45)
 m = sa.encap(p)
-assert m[MACsec].shortlen == 47
-assert len(m) == m[MACsec].shortlen + 20 + (8 if sa.send_sci else 0)
+assert m[MACsec].SL == 47
+assert len(m) == m[MACsec].SL + 20 + (8 if sa.send_sci else 0)
 
 
 = MACsec - authenticate
@@ -274,100 +275,100 @@ except TypeError as e:
 
 = MACsec - Standard Test Vectors - C.1.1 GCM-AES-128 (54-octet frame integrity protection)
 sa = MACsecSA(sci=b'\x12\x15\x35\x24\xC0\x89\x5E\x81', an=2, pn=0xB2C28465, key=b'\xAD\x7A\x2B\xD0\x3E\xAC\x83\x5A\x6F\x62\x0F\xDC\xB5\x06\xB3\x45', icvlen=16, encrypt=0, send_sci=1)
-p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001")))
+p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001"))
 m = sa.encap(p)
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\x12\x15\x35\x24\xC0\x89\x5E\x81\xB2\xC2\x84\x65')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001F09478A9B09007D06F46E9B6A1DA25DD")))
+ref = Raw(bytes.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001F09478A9B09007D06F46E9B6A1DA25DD"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)
 
 = MACsec - Standard Test Vectors - C.1.2 GCM-AES-256 (54-octet frame integrity protection)
 sa = MACsecSA(sci=b'\x12\x15\x35\x24\xC0\x89\x5E\x81', an=2, pn=0xB2C28465, key=b'\xE3\xC0\x8A\x8F\x06\xC6\xE3\xAD\x95\xA7\x05\x57\xB2\x3F\x75\x48\x3C\xE3\x30\x21\xA9\xC7\x2B\x70\x25\x66\x62\x04\xC6\x9C\x0B\x72', icvlen=16, encrypt=0, send_sci=1)
-p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001")))
+p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001"))
 m = sa.encap(p)
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\x12\x15\x35\x24\xC0\x89\x5E\x81\xB2\xC2\x84\x65')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F303132333400012F0BC5AF409E06D609EA8B7D0FA5EA50")))
+ref = Raw(bytes.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F303132333400012F0BC5AF409E06D609EA8B7D0FA5EA50"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)
 
 = MACsec - Standard Test Vectors - C.1.3 GCM-AES-XPN-128 (54-octet frame integrity protection)
 sa = MACsecSA(sci=b'\x12\x15\x35\x24\xC0\x89\x5E\x81', an=2, pn=0xB0DF459CB2C28465, key=b'\xAD\x7A\x2B\xD0\x3E\xAC\x83\x5A\x6F\x62\x0F\xDC\xB5\x06\xB3\x45', icvlen=16, encrypt=0, send_sci=1, xpn_en = True, ssci = 0x7A30C118, salt = b'\xE6\x30\xE8\x1A\x48\xDE\x86\xA2\x1C\x66\xFA\x6D')
-p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001")))
+p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001"))
 m = sa.encap(p)
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\x9C\x00\x29\x02\xF8\x01\xC3\x3E\xAE\xA4\x7E\x08')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F3031323334000117FE1981EBDD4AFC5062697E8BAA0C23")))
+ref = Raw(bytes.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F3031323334000117FE1981EBDD4AFC5062697E8BAA0C23"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)
 
 = MACsec - Standard Test Vectors - C.1.4 GCM-AES-XPN-256 (54-octet frame integrity protection)
 sa = MACsecSA(sci=b'\x12\x15\x35\x24\xC0\x89\x5E\x81', an=2, pn=0xB0DF459CB2C28465, key=b'\xE3\xC0\x8A\x8F\x06\xC6\xE3\xAD\x95\xA7\x05\x57\xB2\x3F\x75\x48\x3C\xE3\x30\x21\xA9\xC7\x2B\x70\x25\x66\x62\x04\xC6\x9C\x0B\x72', icvlen=16, encrypt=0, send_sci=1, xpn_en = True, ssci = 0x7A30C118, salt = b'\xE6\x30\xE8\x1A\x48\xDE\x86\xA2\x1C\x66\xFA\x6D')
-p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001")))
+p = Ether(src='7A:0D:46:DF:99:8D', dst='D6:09:B1:F0:56:63', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340001"))
 m = sa.encap(p)
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\x9C\x00\x29\x02\xF8\x01\xC3\x3E\xAE\xA4\x7E\x08')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F303132333400014DBD2F6A754A6CF728CC129BA6931577")))
+ref = Raw(bytes.fromhex("D609B1F056637A0D46DF998D88E5222AB2C2846512153524C0895E8108000F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F303132333400014DBD2F6A754A6CF728CC129BA6931577"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)
 
 = MACsec - Standard Test Vectors - C.5.1 GCM-AES-128 (54-octet frame confidentiality protection)
 sa = MACsecSA(sci=b'\xF0\x76\x1E\x8D\xCD\x3D\x00\x01', an=0, pn=0x76D457ED, key=b'\x07\x1B\x11\x3B\x0C\xA7\x43\xFE\xCC\xCF\x3D\x05\x1F\x73\x73\x82', icvlen=16, encrypt=1, send_sci=0)
-p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004")))
+p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004"))
 m = sa.encap(p)
 m[MACsec].ES = 1
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\xF0\x76\x1E\x8D\xCD\x3D\x00\x01\x76\xD4\x57\xED')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457ED13B4C72B389DC5018E72A171DD85A5D3752274D3A019FBCAED09A425CD9B2E1C9B72EEE7C9DE7D52B3F3D6A5284F4A6D3FE22A5D6C2B960494C3")))
+ref = Raw(bytes.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457ED13B4C72B389DC5018E72A171DD85A5D3752274D3A019FBCAED09A425CD9B2E1C9B72EEE7C9DE7D52B3F3D6A5284F4A6D3FE22A5D6C2B960494C3"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)
 
 = MACsec - Standard Test Vectors - C.5.2 GCM-AES-256 (54-octet frame confidentiality protection)
 sa = MACsecSA(sci=b'\xF0\x76\x1E\x8D\xCD\x3D\x00\x01', an=0, pn=0x76D457ED, key=b'\x69\x1D\x3E\xE9\x09\xD7\xF5\x41\x67\xFD\x1C\xA0\xB5\xD7\x69\x08\x1F\x2B\xDE\x1A\xEE\x65\x5F\xDB\xAB\x80\xBD\x52\x95\xAE\x6B\xE7', icvlen=16, encrypt=1, send_sci=0)
-p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004")))
+p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004"))
 m = sa.encap(p)
 m[MACsec].ES = 1
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\xF0\x76\x1E\x8D\xCD\x3D\x00\x01\x76\xD4\x57\xED')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457EDC1623F55730C93533097ADDAD25664966125352B43ADACBD61C5EF3AC90B5BEE929CE4630EA79F6CE51912AF39C2D1FDC2051F8B7B3C9D397EF2")))
+ref = Raw(bytes.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457EDC1623F55730C93533097ADDAD25664966125352B43ADACBD61C5EF3AC90B5BEE929CE4630EA79F6CE51912AF39C2D1FDC2051F8B7B3C9D397EF2"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)
 
 = MACsec - Standard Test Vectors - C.5.3 GCM-AES-XPN-128 (54-octet frame confidentiality protection)
 sa = MACsecSA(sci=b'\xF0\x76\x1E\x8D\xCD\x3D\x00\x01', an=0, pn=0xB0DF459C76D457ED, key=b'\x07\x1B\x11\x3B\x0C\xA7\x43\xFE\xCC\xCF\x3D\x05\x1F\x73\x73\x82', icvlen=16, encrypt=1, send_sci=0, xpn_en = True, ssci = 0x7A30C118, salt = b'\xE6\x30\xE8\x1A\x48\xDE\x86\xA2\x1C\x66\xFA\x6D')
-p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004")))
+p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004"))
 m = sa.encap(p)
 m[MACsec].ES = 1
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\x9C\x00\x29\x02\xF8\x01\xC3\x3E\x6A\xB2\xAD\x80')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457ED9CA46984430203ED416EBDC2FE2622BA3E5EAB6961C36383009E187E9B0C88564653B9ABD216441C6AB6F0A232E9E44C978CF7CD84D43484D101")))
+ref = Raw(bytes.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457ED9CA46984430203ED416EBDC2FE2622BA3E5EAB6961C36383009E187E9B0C88564653B9ABD216441C6AB6F0A232E9E44C978CF7CD84D43484D101"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)
 
 = MACsec - Standard Test Vectors - C.5.4 GCM-AES-XPN-256 (54-octet frame confidentiality protection)
 sa = MACsecSA(sci=b'\xF0\x76\x1E\x8D\xCD\x3D\x00\x01', an=0, pn=0xB0DF459C76D457ED, key=b'\x69\x1D\x3E\xE9\x09\xD7\xF5\x41\x67\xFD\x1C\xA0\xB5\xD7\x69\x08\x1F\x2B\xDE\x1A\xEE\x65\x5F\xDB\xAB\x80\xBD\x52\x95\xAE\x6B\xE7', icvlen=16, encrypt=1, send_sci=0, xpn_en = True, ssci = 0x7A30C118, salt = b'\xE6\x30\xE8\x1A\x48\xDE\x86\xA2\x1C\x66\xFA\x6D')
-p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes(bytearray.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004")))
+p = Ether(src='F0:76:1E:8D:CD:3D', dst='E2:01:06:D7:CD:0D', type=0x0800)/Raw(bytes.fromhex("0F101112131415161718191A1B1C1D1E1F202122232425262728292A2B2C2D2E2F30313233340004"))
 m = sa.encap(p)
 m[MACsec].ES = 1
 iv = sa.make_iv(m)
 assert raw(iv) == raw(b'\x9C\x00\x29\x02\xF8\x01\xC3\x3E\x6A\xB2\xAD\x80')
 e = sa.encrypt(m)
-ref = Raw(bytes(bytearray.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457ED88D9F7D1F1578EE34BA7B1ABC89893EF1D3398C9F1DD3E47FBD8553E0FF786EF5699EB01EA10420D0EBD39A0E273C4C7F95ED843207D7A497DFA")))
+ref = Raw(bytes.fromhex("E20106D7CD0DF0761E8DCD3D88E54C2A76D457ED88D9F7D1F1578EE34BA7B1ABC89893EF1D3398C9F1DD3E47FBD8553E0FF786EF5699EB01EA10420D0EBD39A0E273C4C7F95ED843207D7A497DFA"))
 assert raw(e) == raw(ref)
 dt = sa.decrypt(e)
 assert raw(dt) == raw(m)

@@ -12,12 +12,6 @@ then
   # Linux
   OSTOX="linux"
   UT_FLAGS+=" -K tshark"
-  if [ ! -z "$GITHUB_ACTIONS" ]
-  then
-    # Due to a security policy, the firewall of the Azure runner
-    # (Standard_DS2_v2) that runs Github Actions on Linux blocks ICMP.
-    UT_FLAGS+=" -K icmp_firewall"
-  fi
   if [ -z "$SIMPLE_TESTS" ]
   then
     # check vcan
@@ -30,17 +24,37 @@ then
   else
     UT_FLAGS+=" -K vcan_socket"
   fi
-elif [[ "$OSTYPE" = "darwin"* ]] || [ "$TRAVIS_OS_NAME" = "osx" ]
+elif [[ "$OSTYPE" = "darwin"* ]] || [ "$TRAVIS_OS_NAME" = "osx" ] || [[ "$OSTYPE" = "FreeBSD" ]] || [[ "$OSTYPE" = *"bsd"* ]]
 then
   OSTOX="bsd"
   # Travis CI in macOS 10.13+ can't load kexts. Need this for tuntaposx.
   UT_FLAGS+=" -K tun -K tap"
+  if [[ "$OSTYPE" = "openbsd"* ]]
+  then
+    # Note: LibreSSL 3.6.* does not support X25519 according to
+    # the cryptogaphy module source code
+    UT_FLAGS+=" -K libressl"
+  fi
+  if [[ "$OSTYPE" = "netbsd" ]]
+  then
+    UT_FLAGS+=" -K not_netbsd"
+  fi
+fi
+
+if [ ! -z "$GITHUB_ACTIONS" ]
+then
+  # Due to a security policy, the firewall of the Azure runner
+  # (Standard_DS2_v2) that runs Github Actions on Linux blocks ICMP.
+  UT_FLAGS+=" -K icmp_firewall"
 fi
 
 # pypy
 if python --version 2>&1 | grep -q PyPy
 then
   UT_FLAGS+=" -K not_pypy"
+  # Code coverage with PyPy makes it very, very slow. Tests work
+  # but take around 30minutes, so we disable it.
+  export DISABLE_COVERAGE=" "
 fi
 
 # libpcap
@@ -82,11 +96,13 @@ then
 fi
 
 # Configure OpenSSL
-export OPENSSL_CONF=$(python `dirname $BASH_SOURCE`/openssl.py)
+export OPENSSL_CONF=$(${PYTHON:=python} `dirname $BASH_SOURCE`/openssl.py)
 
 # Dump vars (the others were already dumped in install.sh)
 echo UT_FLAGS=$UT_FLAGS
 echo TOXENV=$TOXENV
+echo OPENSSL_CONF=$OPENSSL_CONF
+echo OPENSSL_VER=$(openssl version)
 
 # Launch Scapy unit tests
 TOX_PARALLEL_NO_SPINNER=1 tox -- ${UT_FLAGS} || exit 1

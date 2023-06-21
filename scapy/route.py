@@ -8,15 +8,13 @@ Routing and handling of network interfaces.
 """
 
 
-from __future__ import absolute_import
-
 from scapy.compat import plain_str
 from scapy.config import conf
 from scapy.error import Scapy_Exception, warning
 from scapy.interfaces import resolve_iface
 from scapy.utils import atol, ltoa, itom, pretty_list
 
-from scapy.compat import (
+from typing import (
     Any,
     Dict,
     List,

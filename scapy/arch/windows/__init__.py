@@ -13,8 +13,9 @@ import platform as platform_lib
 import socket
 import struct
 import subprocess as sp
-
 import warnings
+
+import winreg
 
 from scapy.arch.windows.structures import _windows_title, \
     GetAdaptersAddresses, GetIpForwardTable, GetIpForwardTable2, \
@@ -34,23 +35,21 @@ from scapy.pton_ntop import inet_ntop, inet_pton
 from scapy.utils import atol, itom, mac2str, str2mac
 from scapy.utils6 import construct_source_candidate_set, in6_getscope
 from scapy.data import ARPHDR_ETHER, load_manuf
-import scapy.libs.six as six
-from scapy.libs.six.moves import input, winreg
 from scapy.compat import plain_str
 from scapy.supersocket import SuperSocket
 
 # Typing imports
-from scapy.compat import (
-    cast,
-    overload,
+from typing import (
     Any,
     Dict,
     List,
-    Literal,
     Optional,
     Tuple,
     Union,
+    cast,
+    overload,
 )
+from scapy.compat import Literal
 
 conf.use_pcap = True
 
@@ -76,7 +75,7 @@ else:
 
 # hot-patching socket for missing variables on Windows
 if not hasattr(socket, 'IPPROTO_IPIP'):
-    socket.IPPROTO_IPIP = 4
+    socket.IPPROTO_IPIP = 4  # type: ignore
 if not hasattr(socket, 'IP_RECVTTL'):
     socket.IP_RECVTTL = 12  # type: ignore
 if not hasattr(socket, 'IPV6_HDRINCL'):
@@ -87,7 +86,7 @@ if not hasattr(socket, 'IPPROTO_IPV6'):
 if not hasattr(socket, 'SOL_IPV6'):
     socket.SOL_IPV6 = socket.IPPROTO_IPV6  # type: ignore
 if not hasattr(socket, 'IPPROTO_GRE'):
-    socket.IPPROTO_GRE = 47
+    socket.IPPROTO_GRE = 47  # type: ignore
 if not hasattr(socket, 'IPPROTO_AH'):
     socket.IPPROTO_AH = 51
 if not hasattr(socket, 'IPPROTO_ESP'):
@@ -298,16 +297,12 @@ def get_windows_if_list(extended=False):
             ips.extend(_resolve_ips(multicast))
         return ips
 
-    if six.PY2:
-        _str_decode = lambda x: x.encode('utf8', errors='ignore')
-    else:
-        _str_decode = plain_str
     return [
         {
-            "name": _str_decode(x["friendly_name"]),
+            "name": plain_str(x["friendly_name"]),
             "index": x["interface_index"],
-            "description": _str_decode(x["description"]),
-            "guid": _str_decode(x["adapter_name"]),
+            "description": plain_str(x["description"]),
+            "guid": plain_str(x["adapter_name"]),
             "mac": _get_mac(x),
             "ipv4_metric": 0 if WINDOWS_XP else x["ipv4_metric"],
             "ipv6_metric": 0 if WINDOWS_XP else x["ipv6_metric"],
@@ -481,15 +476,15 @@ class NetworkInterface_Win(NetworkInterface):
         self._check_npcap_requirement()
         return self._npcap_set("channel", str(channel))
 
-    def frequence(self):
+    def frequency(self):
         # type: () -> int
-        """Get the frequence of the interface.
+        """Get the frequency of the interface.
         Only available with Npcap."""
         # According to https://nmap.org/npcap/guide/npcap-devguide.html#npcap-feature-dot11  # noqa: E501
         self._check_npcap_requirement()
         return int(self._npcap_get("freq"))
 
-    def setfrequence(self, freq):
+    def setfrequency(self, freq):
         # type: (int) -> bool
         """Set the channel of the interface (1-14):
         Only available with Npcap."""
@@ -623,7 +618,7 @@ class WindowsInterfacesProvider(InterfaceProvider):
                 windows_interfaces[i['guid']] = i
 
         index = 0
-        for netw, if_data in six.iteritems(conf.cache_pcapiflist):
+        for netw, if_data in conf.cache_pcapiflist.items():
             name, ips, flags, _ = if_data
             guid = _pcapname_to_guid(netw)
             data = windows_interfaces.get(guid, None)
@@ -648,7 +643,7 @@ class WindowsInterfacesProvider(InterfaceProvider):
                     'flags': flags
                 }
             # No KeyError will happen here, as we get it from cache
-            results[guid] = NetworkInterface_Win(self, data)
+            results[netw] = NetworkInterface_Win(self, data)
         return results
 
     def reload(self):
@@ -674,7 +669,7 @@ def get_ips(v6=False):
     :param v6: IPv6 addresses
     """
     res = {}
-    for iface in six.itervalues(conf.ifaces):
+    for iface in conf.ifaces.values():
         if v6:
             res[iface] = iface.ips[6]
         else:
@@ -970,11 +965,11 @@ def _route_add_loopback(routes=None,  # type: Optional[List[Any]]
         if iface == conf.loopback_name:
             conf.route.routes.remove(route)
     # Remove conf.loopback_name interface
-    for devname, iface in list(conf.ifaces.items()):
-        if iface == conf.loopback_name:
+    for devname, ifname in list(conf.ifaces.items()):
+        if ifname == conf.loopback_name:
             conf.ifaces.pop(devname)
     # Inject interface
-    conf.ifaces["{0XX00000-X000-0X0X-X00X-00XXXX000XXX}"] = adapter
+    conf.ifaces[r"\Device\NPF_{0XX00000-X000-0X0X-X00X-00XXXX000XXX}"] = adapter
     conf.loopback_name = adapter.network_name
     if isinstance(conf.iface, NetworkInterface):
         if conf.iface.network_name == conf.loopback_name:

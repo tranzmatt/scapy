@@ -50,7 +50,6 @@ from scapy.consts import WINDOWS
 from scapy.error import warning
 from scapy.utils import lhex, mac2str, str2mac
 from scapy.volatile import RandMAC
-from scapy.libs import six
 
 
 ##########
@@ -75,7 +74,7 @@ class LEMACField(Field):
         return str2mac(x[::-1])
 
     def any2i(self, pkt, x):
-        if isinstance(x, (six.binary_type, six.text_type)) and len(x) == 6:
+        if isinstance(x, (bytes, str)) and len(x) == 6:
             x = self.m2i(pkt, x)
         return x
 
@@ -197,7 +196,7 @@ _att_error_codes = {
     0x05: "insufficient auth",
     0x06: "unsupported req",
     0x07: "invalid offset",
-    0x08: "insuficient author",
+    0x08: "insufficient author",
     0x09: "prepare queue full",
     0x0a: "attr not found",
     0x0b: "attr not long",
@@ -859,8 +858,9 @@ class EIR_Manufacturer_Specific_Data(EIR_Element):
         cls.registered_magic_payloads[payload_cls] = magic_check
 
     def default_payload_class(self, payload):
-        for cls, check in six.iteritems(
-                EIR_Manufacturer_Specific_Data.registered_magic_payloads):
+        for cls, check in (
+            EIR_Manufacturer_Specific_Data.registered_magic_payloads.items()
+        ):
             if check(payload):
                 return cls
 
@@ -1523,6 +1523,7 @@ class BluetoothUserSocket(SuperSocket):
         if r != 0:
             raise BluetoothSocketError("Unable to bind")
 
+        self.hci_fd = s
         self.ins = self.outs = socket.fromfd(s, 31, 3, 1)
 
     def send_command(self, cmd):
@@ -1564,6 +1565,7 @@ class BluetoothUserSocket(SuperSocket):
         if hasattr(self, "ins"):
             if self.ins and (WINDOWS or self.ins.fileno() != -1):
                 close(self.ins.fileno())
+        close(self.hci_fd)
 
 
 conf.BTsocket = BluetoothRFCommSocket

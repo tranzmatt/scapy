@@ -133,8 +133,9 @@ assert Test(raw(Test())).sourceip == defaddr
 
 assert IP(dst="0.0.0.0").src == defaddr
 assert IP(raw(IP(dst="0.0.0.0"))).src == defaddr
-assert IP(dst="0.0.0.0/31").src == defaddr
-assert IP(raw(IP(dst="0.0.0.0/31"))).src == defaddr
+defaddr = conf.route.route('1.1.1.1')[1]
+assert IP(dst="1.1.1.1").src == defaddr
+assert IP(raw(IP(dst="1.1.1.1"))).src == defaddr
 
 
 #= ByteField
@@ -182,6 +183,13 @@ assert p.test2 == 0xc000ff3333
 assert p.test3 == 0xffeeddccbbaa9988776655
 assert p.test4 == 309404098707666285700277845
 
+class TestFuzzNBytesField(Packet):
+    fields_desc = [
+        NBytesField('test1', 0, 128),
+    ]
+
+f = fuzz(TestFuzzNBytesField())
+assert f.test1.max == 2 ** (128 * 8) - 1
 
 = StrField
 ~ field strfield
@@ -234,7 +242,6 @@ assert p.sprintf("%s1%") == 'cafe'
 = Creation of a layer with ActionField
 ~ field actionfield
 
-from __future__ import print_function
 
 class TestAction(Packet):
     __slots__ = ["_val", "_fld", "_priv1", "_priv2"]
@@ -354,6 +361,20 @@ assert p.len == 0 and Raw in p and p[Raw].load == b"\x11\x12"
 p = TestFLF(struct.pack("!BIII",3,1234,2345,12345678))
 p
 assert p.len == 3 and p.lst == [1234,2345,12345678]
+
+= Disassemble unaligned
+~ field
+import struct
+class TestFLFUnaligned(Packet):
+    name="test"
+    fields_desc = [ BitFieldLenField("len", None, 3, count_of="lst"),
+                    FieldListField("lst", None, XBitField("elt",0,8), count_from=lambda pkt:pkt.len),
+                    BitField("ignore", None, 5),
+                   ]
+
+p = TestFLFUnaligned(b"\x68\x28\x48\x6a")
+p
+assert p.len == 3 and p.lst == [0x41,0x42,0x43] and p.ignore == 0xa
 
 = Manipulate
 ~ field
@@ -751,6 +772,34 @@ assert p.data[3].data == 0xc102
 assert isinstance(p.payload, conf.raw_layer)
 assert p.payload.load == b'toto'
 
+= Test nested PacketListFields
+~ field
+# Note: having packets that look like this is a terrible idea, and will perform
+# very badly. However we must ensure we don't freeze because of it.
+
+# https://github.com/secdev/scapy/issues/3894
+
+class GuessPayload(Packet):
+     @classmethod
+     def dispatch_hook(cls, *args, **kargs):
+         return TestNestedPLF
+
+class TestNestedPLF(Packet):
+     fields_desc = [
+         ByteField('b', 0),
+         PacketListField('pl', [], GuessPayload)
+     ]
+
+p = TestNestedPLF(b'\x01' * 100)
+
+# check
+i = 1
+while p.pl:
+    p = p.pl[0]
+    p.show()
+    i += 1
+
+assert i == 100
 
 ############
 ############
@@ -847,16 +896,16 @@ f = MultiFlagsField('flags', set(), 3, {
 
 mp = MockPacket(0)
 x = f.i2m(mp, set())
-assert isinstance(x, six.integer_types)
+assert isinstance(x, int)
 assert x == 0
 x = f.i2m(mp, {'A'})
-assert isinstance(x, six.integer_types)
+assert isinstance(x, int)
 assert x == 1
 x = f.i2m(mp, {'A', 'B'})
-assert isinstance(x, six.integer_types)
+assert isinstance(x, int)
 assert x == 3
 x = f.i2m(mp, {'A', 'B', 'bit 2'})
-assert isinstance(x, six.integer_types)
+assert isinstance(x, int)
 assert x == 7
 try:
     x = f.i2m(mp, {'+'})
@@ -1123,10 +1172,6 @@ assert fcb.i2repr_one(None, RandNum(0, 10)) == '<RandNum>'
 True
 
 = EnumField with Enum
-~ python3_only
-
-# not available on Python 2...
-
 from enum import Enum
 
 class JUICE(Enum):
@@ -1650,6 +1695,17 @@ assert a.sprintf("%flags%") == "A+B"
 
 b = FlagsTest2(flags="B+C")
 assert b.flags == 0x1000 | 0x0008
+
+= Conditional FlagsField command
+
+class CondFlagsTest(Packet):
+    fields_desc = [
+        ByteField("b", 0),
+        ConditionalField(FlagsField("f", 0, 8, ""), lambda p: p.b == 0)
+    ]
+
+p = CondFlagsTest(b"\x00\x0f")
+assert p == eval(p.command())
 
 ########
 ########
@@ -2213,3 +2269,47 @@ mp = MockPacket(0)
 f = XStrField('test', None)
 x = f.i2repr(mp, RandBin())
 assert x == '<RandBin>'
+
+############
+############
++ Raw() tests
+
+= unaligned data
+
+p = Raw(b"abc")
+p
+
+offsetdata = bytes.fromhex("0" + p.load.hex() + "0")
+
+p = Raw((offsetdata, 4))
+p
+
+############
+############
++ PacketListField() tests
+
+= unaligned data
+
+class PInner(Packet):
+    name = "PInner"
+    fields_desc = [
+        BitField("x", 0, 8),
+    ]
+    def extract_padding(self, s):
+        return '', s
+
+class POuter(Packet):
+    name = "POuter"
+    fields_desc = [
+        BitField("indent", 0, 4),
+        BitFieldLenField("pcount", None, 8, count_of="plist"),
+        PacketListField("plist", None, PInner,
+                             count_from=lambda pkt: pkt.pcount),
+    ]
+
+p = POuter(b"\xf0\x44\x14\x24\x34\x40")
+p
+
+assert p.indent == 0xf
+assert p.pcount == 4
+assert [p.x for p in p.plist] == [0x41, 0x42, 0x43, 0x44]

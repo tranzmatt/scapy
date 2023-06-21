@@ -27,14 +27,11 @@ For instance, here is what you could do in order to modify the serial of
 No need for obnoxious openssl tweaking anymore. :)
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 import base64
 import os
 import time
 
 from scapy.config import conf, crypto_validator
-import scapy.libs.six as six
 from scapy.error import warning
 from scapy.utils import binrepr
 from scapy.asn1.asn1 import ASN1_BIT_STRING
@@ -48,10 +45,10 @@ from scapy.layers.tls.crypto.pkcs1 import pkcs_os2ip, _get_hash, \
     _EncryptAndVerifyRSA, _DecryptAndSignRSA
 from scapy.compat import raw, bytes_encode
 if conf.crypto_valid:
+    from cryptography.exceptions import InvalidSignature
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa, ec
-    from cryptography.hazmat.backends.openssl.ec import InvalidSignature
 
 
 # Maximum allowed size in bytes for a certificate file, to avoid
@@ -241,7 +238,7 @@ class _PubKeyFactory(_PKIObjMaker):
         return obj
 
 
-class PubKey(six.with_metaclass(_PubKeyFactory, object)):
+class PubKey(metaclass=_PubKeyFactory):
     """
     Parent class for both PubKeyRSA and PubKeyECDSA.
     Provides a common verifyCert() method.
@@ -415,7 +412,7 @@ class _Raw_ASN1_BIT_STRING(ASN1_BIT_STRING):
     __str__ = __bytes__
 
 
-class PrivKey(six.with_metaclass(_PrivKeyFactory, object)):
+class PrivKey(metaclass=_PrivKeyFactory):
     """
     Parent class for both PrivKeyRSA and PrivKeyECDSA.
     Provides common signTBSCert() and resignCert() methods.
@@ -570,7 +567,7 @@ class _CertMaker(_PKIObjMaker):
         return obj
 
 
-class Cert(six.with_metaclass(_CertMaker, object)):
+class Cert(metaclass=_CertMaker):
     """
     Wrapper for the X509_Cert from layers/x509.py.
     Use the 'x509Cert' attribute to access original object.
@@ -759,7 +756,7 @@ class _CRLMaker(_PKIObjMaker):
         return obj
 
 
-class CRL(six.with_metaclass(_CRLMaker, object)):
+class CRL(metaclass=_CRLMaker):
     """
     Wrapper for the X509_CRL from layers/x509.py.
     Use the 'x509CRL' attribute to access original object.

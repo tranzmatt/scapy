@@ -113,7 +113,7 @@ assert exit_status == 0
 
 = IPv6 link-local address selection
 
-IFACES._add_fake_iface("scapy0")
+conf.ifaces._add_fake_iface("scapy0")
 
 from mock import patch
 conf.route6.routes =  [('fe80::', 64, '::', 'scapy0', ['fe80::e039:91ff:fe79:1910'], 256)]
@@ -134,15 +134,14 @@ with patch("scapy.layers.l2.get_if_hwaddr") as mgih:
 conf.iface = bck_conf_iface
 conf.route6.resync()
 
-= IPv6
-~ linux
+= IPv6 - check OS routes
+~ linux ipv6
 
 addrs = in6_getifaddr()
-if len(addrs) == 0:
-    assert True
-else:
-    assert all([in6_isvalid(addr[0]) for addr in in6_getifaddr()])
-    assert set([addr[2] for addr in in6_getifaddr()]) == conf.route6.ipv6_ifaces
+if addrs:
+    assert all(in6_isvalid(addr[0]) for addr in in6_getifaddr()), 'invalid ipv6 address'
+    ifaces6 = [addr[2] for addr in in6_getifaddr()]
+    assert all(iface in ifaces6 for iface in conf.route6.ipv6_ifaces), 'ipv6 interface has route but no real'
 
 
 = veth interface error handling
@@ -293,17 +292,17 @@ test_read_routes()
 ~ linux needs_root
 
 from scapy.arch.linux import L3PacketSocket
-import scapy.libs.six as six
 
-if six.PY3:
-    import mock, socket
-    @mock.patch("scapy.arch.linux.socket.socket.sendto")
-    def test_L3PacketSocket_sendto_python3(mock_sendto):
-        mock_sendto.side_effect = OSError(22, 2807)
-        l3ps = L3PacketSocket()
-        l3ps.send(IP(dst="8.8.8.8")/ICMP())
-        return True
-    assert test_L3PacketSocket_sendto_python3()
+import mock, socket
+
+@mock.patch("scapy.arch.linux.socket.socket.sendto")
+def test_L3PacketSocket_sendto_python3(mock_sendto):
+    mock_sendto.side_effect = OSError(22, 2807)
+    l3ps = L3PacketSocket()
+    l3ps.send(IP(dst="8.8.8.8")/ICMP())
+    return True
+
+assert test_L3PacketSocket_sendto_python3()
 
 = Test _interface_selection
 ~ netaccess linux needs_root
@@ -314,11 +313,15 @@ assert _interface_selection(None, IP(dst="8.8.8.8")/UDP()) == conf.iface
 exit_status = os.system("ip link add name scapy0 type dummy")
 exit_status = os.system("ip addr add 192.0.2.1/24 dev scapy0")
 exit_status = os.system("ip link set scapy0 up")
+conf.ifaces.reload()
+conf.route.resync()
 assert _interface_selection(None, IP(dst="192.0.2.42")/UDP()) == "scapy0"
 exit_status = os.system("ip link del name dev scapy0")
+conf.ifaces.reload()
+conf.route.resync()
 
 = Test 802.Q sniffing
-~ linux needs_root python3_only veth
+~ linux needs_root veth
 
 from threading import Thread, Condition
 

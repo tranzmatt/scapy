@@ -1,7 +1,8 @@
 % Import tests
+~ not_pypy
 
 + Import tests
-~ python3_only imports
+~ imports
 
 = Prepare importing all scapy files
 

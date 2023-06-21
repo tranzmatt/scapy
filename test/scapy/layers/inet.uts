@@ -332,7 +332,7 @@ assert opt.rnextkeyid == 2
 assert opt.mac == b"FAKE"
 
 = TCP Authentication Option: parse from TCP
-p = IP(bytes(bytearray.fromhex("45e0004cdd0f4000ff06bf6b0a0b0c0dac1b1c1de9d700b3fbfbab5a00000000e002ffffcac40000020405b4010303080402080a00155ab7000000001d103d542ee437c6f8ede6d7c4d602e7")))
+p = IP(bytes.fromhex("45e0004cdd0f4000ff06bf6b0a0b0c0dac1b1c1de9d700b3fbfbab5a00000000e002ffffcac40000020405b4010303080402080a00155ab7000000001d103d542ee437c6f8ede6d7c4d602e7"))
 tcpao = get_tcpao(p[TCP])
 assert isinstance(tcpao, TCPAOValue)
 assert tcpao.keyid == 61
@@ -362,7 +362,6 @@ options = pkt.options._fix()
 options
 
 = TCP random options - MD5 (#GH3777)
-~ python3_only
 random.seed(0x2813)
 pkt = TCP(options=RandTCPOptions()._fix())
 assert pkt.options[0][0] == "MD5"
@@ -532,7 +531,7 @@ for x in ICMP(type=range(0,40),code=range(0,40)):
     (IP()/x).hashret()
 
 = IPv4 - traceroute utilities
-ip_ttl = [("192.168.0.%d" % i, i) for i in six.moves.range(1, 10)]
+ip_ttl = [("192.168.0.%d" % i, i) for i in range(1, 10)]
 
 tr_packets = [ (IP(dst="192.168.0.1", src="192.168.0.254", ttl=ttl)/TCP(options=[("Timestamp", "00:00:%.2d.00" % ttl)])/"scapy",
                 IP(dst="192.168.0.254", src=ip)/ICMP(type=11)/IPerror(dst="192.168.0.1", src="192.168.0.254", ttl=0)/TCPerror()/"scapy")
@@ -573,7 +572,7 @@ def test_summary():
         "IP / ICMP 192.168.0.9 > 192.168.0.254 time-exceeded "
         "ttl-zero-during-transit / IPerror / TCPerror / "
         "Raw" % (ftp_data, http) in result_summary
-        for ftp_data in ['21', 'ftp_data']
+        for ftp_data in ['20', 'ftp_data']
         for http in ['80', 'http', 'www_http', 'www']
     ))
 

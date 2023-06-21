@@ -1,19 +1,28 @@
 #! /usr/bin/env python
 
 """
-Distutils setup file for Scapy.
+Setuptools setup file for Scapy.
 """
 
-try:
-    from setuptools import setup, find_packages
-except:
-    raise ImportError("setuptools is required to install scapy !")
 import io
 import os
+import sys
+
+if sys.version_info[0] <= 2:
+    raise OSError("Scapy no longer supports Python 2 ! Please use Scapy 2.5.0")
+
+try:
+    from setuptools import setup
+    from setuptools.command.sdist import sdist
+    from setuptools.command.build_py import build_py
+except:
+    raise ImportError("setuptools is required to install scapy !")
 
 
 def get_long_description():
-    """Extract description from README.md, for PyPI's usage"""
+    """
+    Extract description from README.md, for PyPI's usage
+    """
     def process_ignore_tags(buffer):
         return "\n".join(
             x for x in buffer.split("\n") if "<!-- ignore_ppi -->" not in x
@@ -29,76 +38,51 @@ def get_long_description():
         return None
 
 
-# https://packaging.python.org/guides/distributing-packages-using-setuptools/
-setup(
-    name='scapy',
-    version=__import__('scapy').VERSION,
-    packages=find_packages(),
-    data_files=[('share/man/man1', ["doc/scapy.1"])],
-    package_data={
-        'scapy': ['VERSION'],
-    },
-    # Build starting scripts automatically
-    entry_points={
-        'console_scripts': [
-            'scapy = scapy.main:interact'
-        ]
-    },
-    python_requires='>=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, <4',
-    # pip > 9 handles all the versioning
-    extras_require={
-        'basic': ["ipython"],
-        'complete': [
-            'ipython',
-            'pyx',
-            'cryptography>=2.0',
-            'matplotlib'
-        ],
-        'docs': [
-            'sphinx>=3.0.0',
-            'sphinx_rtd_theme>=0.4.3',
-            'tox>=3.0.0'
-        ]
-    },
-    # We use __file__ in scapy/__init__.py, therefore Scapy isn't zip safe
-    zip_safe=False,
+# Note: why do we bother including a 'scapy/VERSION' file and doing our
+# own versioning stuff, instead of using more standard methods?
+# Because it's all garbage.
 
-    # Metadata
-    author='Philippe BIONDI',
-    author_email='phil(at)secdev.org',
-    maintainer='Pierre LALET, Gabriel POTTER, Guillaume VALADON',
-    description='Scapy: interactive packet manipulation tool',
+# If you remain fully standard, there's no way
+# of adding the version dynamically, even less when using archives
+# (currently, we're able to add the version anytime someone exports Scapy
+# on github).
+
+# If you use setuptools_scm, you'll be able to have the git tag set into
+# the wheel (therefore the metadata), that you can then retrieve using
+# importlib.metadata, BUT it breaks sdist (source packages), as those
+# don't include metadata.
+
+
+def _build_version(path):
+    """
+    This adds the scapy/VERSION file when creating a sdist and a wheel
+    """
+    fn = os.path.join(path, 'scapy', 'VERSION')
+    with open(fn, 'w') as f:
+        f.write(__import__('scapy').VERSION)
+
+
+class SDist(sdist):
+    """
+    Modified sdist to create scapy/VERSION file
+    """
+    def make_release_tree(self, base_dir, *args, **kwargs):
+        super(SDist, self).make_release_tree(base_dir, *args, **kwargs)
+        # ensure there's a scapy/VERSION file
+        _build_version(base_dir)
+
+
+class BuildPy(build_py):
+    """
+    Modified build_py to create scapy/VERSION file
+    """
+    def build_package_data(self):
+        super(BuildPy, self).build_package_data()
+        # ensure there's a scapy/VERSION file
+        _build_version(self.build_lib)
+
+setup(
+    cmdclass={'sdist': SDist, 'build_py': BuildPy},
     long_description=get_long_description(),
     long_description_content_type='text/markdown',
-    license='GPL-2.0-only',
-    url='https://scapy.net',
-    project_urls={
-        'Documentation': 'https://scapy.readthedocs.io',
-        'Source Code': 'https://github.com/secdev/scapy/',
-    },
-    download_url='https://github.com/secdev/scapy/tarball/master',
-    keywords=["network"],
-    classifiers=[
-        "Development Status :: 5 - Production/Stable",
-        "Environment :: Console",
-        "Intended Audience :: Developers",
-        "Intended Audience :: Information Technology",
-        "Intended Audience :: Science/Research",
-        "Intended Audience :: System Administrators",
-        "Intended Audience :: Telecommunications Industry",
-        "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.4",
-        "Programming Language :: Python :: 3.5",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
-        "Topic :: Security",
-        "Topic :: System :: Networking",
-        "Topic :: System :: Networking :: Monitoring",
-    ]
 )

@@ -10,14 +10,23 @@
 
 import struct
 
-from scapy.compat import Iterable, Optional, Union, List, Tuple, Dict, Any, \
-    Type
 from scapy.utils import EDecimal
 from scapy.packet import Packet
 from scapy.sessions import DefaultSession
 from scapy.contrib.isotp.isotp_packet import ISOTP, N_PCI_CF, N_PCI_SF, \
     N_PCI_FF, N_PCI_FC
-import scapy.libs.six as six
+
+# Typing imports
+from typing import (
+    Iterable,
+    Optional,
+    Union,
+    List,
+    Tuple,
+    Dict,
+    Any,
+    Type,
+)
 
 
 class ISOTPMessageBuilderIter(object):
@@ -92,17 +101,14 @@ class ISOTPMessageBuilder(object):
             self.pieces.append(piece)
             self.current_len += len(piece)
             if self.current_len >= self.total_len:
-                if six.PY3:
-                    isotp_data = b"".join(self.pieces)
-                else:
-                    isotp_data = "".join(map(str, self.pieces))
+                isotp_data = b"".join(self.pieces)
                 self.ready = isotp_data[:self.total_len]
 
     def __init__(
             self,
             use_ext_address=None,  # type: Optional[bool]
             rx_id=None,  # type: Optional[Union[int, List[int], Iterable[int]]]
-            basecls=ISOTP  # type: Type[Packet]
+            basecls=ISOTP  # type: Type[ISOTP]
     ):
         # type: (...) -> None
         self.ready = []  # type: List[Tuple[int, Optional[int], ISOTPMessageBuilder.Bucket]]  # noqa: E501
@@ -141,7 +147,7 @@ class ISOTPMessageBuilder(object):
         if len(data) > 1 and self.use_ext_addr is not True:
             self._try_feed(can.identifier, None, data, can.time)
         if len(data) > 2 and self.use_ext_addr is not False:
-            ea = six.indexbytes(data, 0)
+            ea = data[0]
             self._try_feed(can.identifier, ea, data[1:], can.time)
 
     @property
@@ -159,7 +165,7 @@ class ISOTPMessageBuilder(object):
         return self.count
 
     def pop(self, identifier=None, ext_addr=None):
-        # type: (Optional[int], Optional[int]) -> Optional[Packet]
+        # type: (Optional[int], Optional[int]) -> Optional[ISOTP]
         """Returns a built ISOTP message
 
         :param identifier: if not None, only return isotp messages with this
@@ -190,9 +196,9 @@ class ISOTPMessageBuilder(object):
     @staticmethod
     def _build(
             t,  # type: Tuple[int, Optional[int], ISOTPMessageBuilder.Bucket]
-            basecls=ISOTP  # type: Type[Packet]
+            basecls=ISOTP  # type: Type[ISOTP]
     ):
-        # type: (...) -> Packet
+        # type: (...) -> ISOTP
         bucket = t[2]
         data = bucket.ready or b""
         p = basecls(data)
@@ -235,7 +241,7 @@ class ISOTPMessageBuilder(object):
             # At least 2 bytes are necessary: 1 for length and 1 for data
             return False
 
-        length = six.indexbytes(data, 0) & 0x0f
+        length = data[0] & 0x0f
         isotp_data = data[1:length + 1]
 
         if length > len(isotp_data):
@@ -253,7 +259,7 @@ class ISOTPMessageBuilder(object):
             # 1 for data
             return False
 
-        first_byte = six.indexbytes(data, 0)
+        first_byte = data[0]
         seq_no = first_byte & 0x0f
         isotp_data = data[1:]
 
@@ -303,7 +309,7 @@ class ISOTPMessageBuilder(object):
 
     def _try_feed(self, identifier, ea, data, ts):
         # type: (int, Optional[int], bytes, Union[EDecimal, float]) -> None
-        first_byte = six.indexbytes(data, 0)
+        first_byte = data[0]
         if len(data) > 1 and first_byte & 0xf0 == N_PCI_SF:
             self._feed_single_frame(identifier, ea, data, ts)
         if len(data) > 2 and first_byte & 0xf0 == N_PCI_FF:

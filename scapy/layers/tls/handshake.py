@@ -12,7 +12,6 @@ This module covers the handshake TLS subprotocol, except for the key exchange
 mechanisms which are addressed with keyexchange.py.
 """
 
-from __future__ import absolute_import
 import math
 import os
 import struct
@@ -37,7 +36,6 @@ from scapy.fields import (
 
 from scapy.compat import hex_bytes, orb, raw
 from scapy.config import conf
-from scapy.libs import six
 from scapy.packet import Packet, Raw, Padding
 from scapy.utils import randstring, repr_hex
 from scapy.layers.x509 import OCSP_Response
@@ -180,7 +178,7 @@ class _CipherSuitesField(StrLenField):
         self.itemsize = struct.calcsize(itemfmt)
         i2s = self.i2s = {}
         s2i = self.s2i = {}
-        for k in six.iterkeys(dico):
+        for k in dico.keys():
             i2s[k] = dico[k]
             s2i[dico[k]] = k
 

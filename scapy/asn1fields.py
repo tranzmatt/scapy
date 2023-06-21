@@ -41,9 +41,8 @@ from scapy.volatile import (
 )
 
 from scapy import packet
-import scapy.libs.six as six
 
-from scapy.compat import (
+from typing import (
     Any,
     AnyStr,
     Callable,
@@ -182,7 +181,7 @@ class ASN1F_field(ASN1F_element, Generic[_I, _A]):
         try:
             c = cls(s, _underlayer=_underlayer)
         except ASN1F_badsequence:
-            c = packet.Raw(s, _underlayer=_underlayer)
+            c = packet.Raw(s, _underlayer=_underlayer)  # type: ignore
         cpad = c.getlayer(packet.Raw)
         s = b""
         if cpad is not None:
@@ -230,8 +229,8 @@ class ASN1F_field(ASN1F_element, Generic[_I, _A]):
         return repr(self)
 
     def randval(self):
-        # type: () -> RandField[Any]
-        return RandInt()
+        # type: () -> RandField[_I]
+        return cast(RandField[_I], RandInt())
 
 
 ############################
@@ -275,7 +274,7 @@ class ASN1F_enum_INTEGER(ASN1F_INTEGER):
             keys = range(len(enum))
         else:
             keys = list(enum)
-        if any(isinstance(x, six.string_types) for x in keys):
+        if any(isinstance(x, str) for x in keys):
             i2s, s2i = s2i, i2s  # type: ignore
         for k in keys:
             i2s[k] = enum[k]
@@ -528,7 +527,7 @@ class ASN1F_SEQUENCE_OF(ASN1F_field[List[_SEQ_T],
                  ):
         # type: (...) -> None
         if isinstance(cls, type) and issubclass(cls, ASN1F_field):
-            self.fld = cast(Type[ASN1F_field[Any, Any]], cls)
+            self.fld = cls
             self._extract_packet = lambda s, pkt: self.fld(
                 self.name, b"").m2i(pkt, s)
             self.holds_packets = 0
@@ -691,13 +690,12 @@ class ASN1F_CHOICE(ASN1F_field[_CHOICE_T, ASN1_Object[Any]]):
                 # should be ASN1_Packet
                 if hasattr(p.ASN1_root, "choices"):
                     root = cast(ASN1F_CHOICE, p.ASN1_root)
-                    for k, v in six.iteritems(root.choices):
+                    for k, v in root.choices.items():
                         # ASN1F_CHOICE recursion
                         self.choices[k] = v
                 else:
                     self.choices[p.ASN1_root.network_tag] = p
             elif hasattr(p, "ASN1_tag"):
-                p = cast(Union[ASN1F_PACKET, Type[ASN1F_field[Any, Any]]], p)
                 if isinstance(p, type):
                     # should be ASN1F_field class
                     self.choices[int(p.ASN1_tag)] = p
@@ -736,9 +734,8 @@ class ASN1F_CHOICE(ASN1F_field[_CHOICE_T, ASN1_Object[Any]]):
                     )
                 )
         if hasattr(choice, "ASN1_root"):
-            choice = cast('ASN1_Packet', choice)
             # we don't want to import ASN1_Packet in this module...
-            return self.extract_packet(choice, s, _underlayer=pkt)
+            return self.extract_packet(choice, s, _underlayer=pkt)  # type: ignore
         elif isinstance(choice, type):
             return choice(self.name, b"").m2i(pkt, s)
         else:
@@ -761,10 +758,10 @@ class ASN1F_CHOICE(ASN1F_field[_CHOICE_T, ASN1_Object[Any]]):
     def randval(self):
         # type: () -> RandChoice
         randchoices = []
-        for p in six.itervalues(self.choices):
+        for p in self.choices.values():
             if hasattr(p, "ASN1_root"):
                 # should be ASN1_Packet class
-                randchoices.append(packet.fuzz(p()))
+                randchoices.append(packet.fuzz(p()))  # type: ignore
             elif hasattr(p, "ASN1_tag"):
                 if isinstance(p, type):
                     # should be (basic) ASN1F_field class
@@ -842,7 +839,7 @@ class ASN1F_PACKET(ASN1F_field['ASN1_Packet', Optional['ASN1_Packet']]):
                                implicit_tag=self.implicit_tag,
                                explicit_tag=self.explicit_tag)
 
-    def randval(self):
+    def randval(self):  # type: ignore
         # type: () -> ASN1_Packet
         return packet.fuzz(self.cls())
 
@@ -864,8 +861,10 @@ class ASN1F_BIT_STRING_ENCAPS(ASN1F_BIT_STRING):
                  ):
         # type: (...) -> None
         self.cls = cls
-        super(ASN1F_BIT_STRING_ENCAPS, self).__init__(
-            name, default and raw(default), context=context,
+        super(ASN1F_BIT_STRING_ENCAPS, self).__init__(  # type: ignore
+            name,
+            default and raw(default),
+            context=context,
             implicit_tag=implicit_tag,
             explicit_tag=explicit_tag
         )

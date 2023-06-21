@@ -7,8 +7,6 @@
 Implementation of the configuration object.
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 
 import atexit
 import copy
@@ -25,14 +23,13 @@ from scapy import VERSION
 from scapy.base_classes import BasePacket
 from scapy.consts import DARWIN, WINDOWS, LINUX, BSD, SOLARIS
 from scapy.error import log_scapy, warning, ScapyInvalidPlatformException
-from scapy.libs import six
 from scapy.themes import NoTheme, apply_ipython_style
 
-from scapy.compat import (
+# Typing imports
+from typing import (
     cast,
     Any,
     Callable,
-    DecoratorCallable,
     Dict,
     Iterator,
     List,
@@ -46,11 +43,12 @@ from scapy.compat import (
     TYPE_CHECKING,
 )
 from types import ModuleType
+from scapy.compat import DecoratorCallable
 
 if TYPE_CHECKING:
     # Do not import at runtime
     import scapy.as_resolvers
-    from scapy.nmap import NmapKnowledgeBase
+    from scapy.modules.nmap import NmapKnowledgeBase
     from scapy.packet import Packet
     from scapy.supersocket import SuperSocket  # noqa: F401
     import scapy.asn1.asn1
@@ -249,14 +247,14 @@ class Num2Layer:
     def __repr__(self):
         # type: () -> str
         lst = []
-        for num, layer in six.iteritems(self.num2layer):
+        for num, layer in self.num2layer.items():
             if layer in self.layer2num and self.layer2num[layer] == num:
                 dir = "<->"
             else:
                 dir = " ->"
             lst.append((num, "%#6x %s %-20s (%s)" % (num, dir, layer.__name__,
                                                      layer._name)))
-        for layer, num in six.iteritems(self.layer2num):
+        for layer, num in self.layer2num.items():
             if num not in self.num2layer or self.num2layer[num] != layer:
                 lst.append((num, "%#6x <-  %-20s (%s)" % (num, layer.__name__,
                                                           layer._name)))
@@ -303,7 +301,7 @@ class LayersList(List[Type['scapy.packet.Packet']]):
         """Disable dissection of unused layers to speed up dissection"""
         if self.filtered:
             raise ValueError("Already filtered. Please disable it first")
-        for lay in six.itervalues(self.ldict):
+        for lay in self.ldict.values():
             for cls in lay:
                 if cls not in self._backup_dict:
                     self._backup_dict[cls] = cls.payload_guess[:]
@@ -317,7 +315,7 @@ class LayersList(List[Type['scapy.packet.Packet']]):
         """Re-enable dissection for all layers"""
         if not self.filtered:
             raise ValueError("Not filtered. Please filter first")
-        for lay in six.itervalues(self.ldict):
+        for lay in self.ldict.values():
             for cls in lay:
                 cls.payload_guess = self._backup_dict[cls]
         self._backup_dict.clear()
@@ -395,7 +393,7 @@ class CacheInstance(Dict[str, Any], object):
                **kwargs  # type: Any
                ):
         # type: (...) -> None
-        for key, value in six.iteritems(other):
+        for key, value in other.items():
             # We only update an element from `other` either if it does
             # not exist in `self` or if the entry in `self` is older.
             if key not in self or self._timetable[key] < other._timetable[key]:
@@ -405,16 +403,21 @@ class CacheInstance(Dict[str, Any], object):
     def iteritems(self):
         # type: () -> Iterator[Tuple[str, Any]]
         if self.timeout is None:
-            return six.iteritems(self.__dict__)  # type: ignore
+            return self.__dict__.items()  # type: ignore
         t0 = time.time()
-        return ((k, v) for (k, v) in six.iteritems(self.__dict__) if t0 - self._timetable[k] < self.timeout)  # noqa: E501
+        return (
+            (k, v) for (k, v) in self.__dict__.items()
+            if t0 - self._timetable[k] < self.timeout
+        )
 
     def iterkeys(self):
         # type: () -> Iterator[str]
         if self.timeout is None:
-            return six.iterkeys(self.__dict__)  # type: ignore
+            return self.__dict__.keys()  # type: ignore
         t0 = time.time()
-        return (k for k in six.iterkeys(self.__dict__) if t0 - self._timetable[k] < self.timeout)  # noqa: E501
+        return (
+            k for k in self.__dict__ if t0 - self._timetable[k] < self.timeout
+        )
 
     def __iter__(self):
         # type: () -> Iterator[str]
@@ -423,30 +426,39 @@ class CacheInstance(Dict[str, Any], object):
     def itervalues(self):
         # type: () -> Iterator[Tuple[str, Any]]
         if self.timeout is None:
-            return six.itervalues(self.__dict__)  # type: ignore
+            return self.__dict__.values()  # type: ignore
         t0 = time.time()
-        return (v for (k, v) in six.iteritems(self.__dict__) if t0 - self._timetable[k] < self.timeout)  # noqa: E501
+        return (
+            v for (k, v) in self.__dict__.items()
+            if t0 - self._timetable[k] < self.timeout
+        )
 
     def items(self):
         # type: () -> Any
         if self.timeout is None:
             return super(CacheInstance, self).items()
         t0 = time.time()
-        return [(k, v) for (k, v) in six.iteritems(self.__dict__) if t0 - self._timetable[k] < self.timeout]  # noqa: E501
+        return [
+            (k, v) for (k, v) in self.__dict__.items()
+            if t0 - self._timetable[k] < self.timeout
+        ]
 
     def keys(self):
         # type: () -> Any
         if self.timeout is None:
             return super(CacheInstance, self).keys()
         t0 = time.time()
-        return [k for k in six.iterkeys(self.__dict__) if t0 - self._timetable[k] < self.timeout]  # noqa: E501
+        return [k for k in self.__dict__ if t0 - self._timetable[k] < self.timeout]
 
     def values(self):
         # type: () -> Any
         if self.timeout is None:
-            return list(six.itervalues(self))
+            return list(self.values())
         t0 = time.time()
-        return [v for (k, v) in six.iteritems(self.__dict__) if t0 - self._timetable[k] < self.timeout]  # noqa: E501
+        return [
+            v for (k, v) in self.__dict__.items()
+            if t0 - self._timetable[k] < self.timeout
+        ]
 
     def __len__(self):
         # type: () -> int
@@ -462,9 +474,9 @@ class CacheInstance(Dict[str, Any], object):
         # type: () -> str
         s = []
         if self:
-            mk = max(len(k) for k in six.iterkeys(self.__dict__))
+            mk = max(len(k) for k in self.__dict__)
             fmt = "%%-%is %%s" % (mk + 1)
-            for item in six.iteritems(self.__dict__):
+            for item in self.__dict__.items():
                 s.append(fmt % item)
         return "\n".join(s)
 

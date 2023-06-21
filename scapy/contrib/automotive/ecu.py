@@ -15,15 +15,27 @@ from collections import defaultdict
 from types import GeneratorType
 from threading import Lock
 
-import scapy.libs.six as six
-from scapy.compat import Any, Union, Iterable, Callable, List, Optional, \
-    Tuple, Type, cast, Dict, orb, ValuesView
+from scapy.compat import orb
 from scapy.packet import Raw, Packet
 from scapy.plist import PacketList
 from scapy.sessions import DefaultSession
 from scapy.ansmachine import AnsweringMachine
 from scapy.supersocket import SuperSocket
 from scapy.error import Scapy_Exception
+
+# Typing imports
+from typing import (
+    Any,
+    Union,
+    Iterable,
+    Callable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    cast,
+    Dict,
+)
 
 
 __all__ = ["EcuState", "Ecu", "EcuResponse", "EcuSession",
@@ -40,7 +52,7 @@ class EcuState(object):
 
     def __init__(self, **kwargs):
         # type: (Any) -> None
-        self.__cache__ = None  # type: Optional[Tuple[List[EcuState], ValuesView[Any]]]  # noqa: E501
+        self.__cache__ = None  # type: Optional[Tuple[List[EcuState], List[Any]]]  # noqa: E501
         for k, v in kwargs.items():
             if isinstance(v, GeneratorType):
                 v = list(v)
@@ -48,24 +60,24 @@ class EcuState(object):
 
     def _expand(self):
         # type: () -> List[EcuState]
-        if self.__cache__ is None or \
-                self.__cache__[1] != self.__dict__.values():
+        values = list(self.__dict__.values())
+        keys = list(self.__dict__.keys())
+        if self.__cache__ is None or self.__cache__[1] != values:
             expanded = list()
-            for x in itertools.product(
-                    *[self._flatten(v) for v in self.__dict__.values()]):
+            for x in itertools.product(*[self._flatten(v) for v in values]):
                 kwargs = {}
-                for i, k in enumerate(self.__dict__.keys()):
+                for i, k in enumerate(keys):
                     if x[i] is None:
                         continue
                     kwargs[k] = x[i]
                 expanded.append(EcuState(**kwargs))
-            self.__cache__ = (expanded, self.__dict__.values())
+            self.__cache__ = (expanded, values)
         return self.__cache__[0]
 
     @staticmethod
     def _flatten(x):
         # type: (Any) -> List[Any]
-        if isinstance(x, (six.string_types, bytes)):
+        if isinstance(x, (str, bytes)):
             return [x]
         elif hasattr(x, "__iter__") and hasattr(x, "__len__") and len(x) == 1:
             return list(*x)
@@ -505,7 +517,6 @@ class EcuResponse:
                 state = cast(List[EcuState], state)
                 self.__states = state
             else:
-                state = cast(EcuState, state)
                 self.__states = [state]
 
         if isinstance(responses, PacketList):

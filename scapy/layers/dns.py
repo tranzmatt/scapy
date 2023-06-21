@@ -7,7 +7,6 @@
 DNS: Domain Name System.
 """
 
-from __future__ import absolute_import
 import operator
 import socket
 import struct
@@ -30,10 +29,9 @@ from scapy.pton_ntop import inet_ntop, inet_pton
 
 from scapy.layers.inet import IP, DestIPField, IPField, UDP, TCP
 from scapy.layers.inet6 import IPv6, DestIP6Field, IP6Field
-import scapy.libs.six as six
 
 
-from scapy.compat import (
+from typing import (
     Any,
     Optional,
     Tuple,
@@ -543,7 +541,7 @@ class DNS(Packet):
 # RFC 2671 - Extension Mechanisms for DNS (EDNS0)
 
 edns0types = {0: "Reserved", 1: "LLQ", 2: "UL", 3: "NSID", 4: "Reserved",
-              5: "PING", 8: "edns-client-subnet"}
+              5: "PING", 8: "edns-client-subnet", 10: "COOKIE"}
 
 
 class EDNS0TLV(Packet):
@@ -1026,7 +1024,7 @@ DNSRR_DISPATCHER = {
     32769: DNSRRDLV,     # RFC 4431
 }
 
-DNSSEC_CLASSES = tuple(six.itervalues(DNSRR_DISPATCHER))
+DNSSEC_CLASSES = tuple(DNSRR_DISPATCHER.values())
 
 
 def isdnssecRR(obj):

@@ -6,6 +6,7 @@
 # scapy.contrib.description = UDS AutomotiveTestCaseExecutor
 # scapy.contrib.status = loads
 
+from abc import ABC
 import struct
 import random
 import time
@@ -14,13 +15,10 @@ import copy
 import inspect
 
 from collections import defaultdict
-from typing import Sequence
 
-from scapy.compat import Dict, Optional, List, Type, Any, Iterable, \
-    cast, Union, NamedTuple, orb, Set
+from scapy.compat import orb
 from scapy.contrib.automotive import log_automotive
 from scapy.packet import Raw, Packet
-import scapy.libs.six as six
 from scapy.error import Scapy_Exception
 from scapy.contrib.automotive.uds import UDS, UDS_NR, UDS_DSC, UDS_TP, \
     UDS_RDBI, UDS_WDBI, UDS_SA, UDS_RC, UDS_IOCBI, UDS_RMBA, UDS_ER, \
@@ -41,12 +39,21 @@ from scapy.contrib.automotive.scanner.executor import AutomotiveTestCaseExecutor
 # TODO: Refactor this import
 from scapy.contrib.automotive.uds_ecu_states import *  # noqa: F401, F403
 
-if six.PY34:
-    from abc import ABC
-else:
-    from abc import ABCMeta
+# typing imports
+from typing import (
+    Dict,
+    Optional,
+    NamedTuple,
+    List,
+    Type,
+    Any,
+    Iterable,
+    cast,
+    Union,
+    Set,
+    Sequence,
+)
 
-    ABC = ABCMeta('ABC', (), {})  # type: ignore
 
 # Definition outside the class UDS_RMBASequentialEnumerator
 # to allow pickling
@@ -177,7 +184,7 @@ class UDS_DSCEnumerator(UDS_Enumerator, StateGeneratingServiceEnumerator):
             delay = conf[UDS_DSCEnumerator.__name__]["delay_state_change"]
         except KeyError:
             delay = 5
-        time.sleep(delay)
+        conf.stop_event.wait(delay)
         state_changed = UDS_DSCEnumerator.enter_state(
             sock, conf, kwargs["req"])
         if not state_changed:
@@ -214,7 +221,7 @@ class UDS_TPEnumerator(UDS_Enumerator, StateGeneratingServiceEnumerator):
             return True
 
         UDS_TPEnumerator.cleanup(socket, configuration)
-        configuration["tps"] = UDS_TesterPresentSender(socket)
+        configuration["tps"] = UDS_TesterPresentSender(socket, interval=3)
         configuration["tps"].start()
         return True
 
@@ -224,8 +231,9 @@ class UDS_TPEnumerator(UDS_Enumerator, StateGeneratingServiceEnumerator):
         try:
             configuration["tps"].stop()
             configuration["tps"] = None
-        except (AttributeError, KeyError) as e:
-            log_automotive.debug("Cleanup TP-Sender Error: %s", e)
+        except (AttributeError, KeyError):
+            pass
+            # log_automotive.debug("Cleanup TP-Sender Error: %s", e)
         return True
 
     def get_transition_function(self, socket, edge):
@@ -298,8 +306,24 @@ class UDS_RDBPIEnumerator(UDS_Enumerator):
 class UDS_ServiceEnumerator(UDS_Enumerator):
     _description = "Available services and negative response per state"
     _supported_kwargs = copy.copy(ServiceEnumerator._supported_kwargs)
+    _supported_kwargs.update({
+        "request_length": (int, lambda x: 1 <= x < 5)
+    })
     _supported_kwargs["scan_range"] = \
         ((list, tuple, range), lambda x: max(x) < 0x100 and min(x) >= 0)
+
+    _supported_kwargs_doc = ServiceEnumerator._supported_kwargs_doc + """
+        :param int request_length: Specifies the maximum length of arequest
+                                   packet. The enumerator will generate all
+                                   packets from a length of 1 (UDS Service
+                                   ID only) up to the specified
+                                   `request_length`."""
+
+    def execute(self, socket, state, **kwargs):
+        # type: (_SocketUnion, EcuState, Any) -> None
+        super(UDS_ServiceEnumerator, self).execute(socket, state, **kwargs)
+
+    execute.__doc__ = _supported_kwargs_doc
 
     def _get_initial_requests(self, **kwargs):
         # type: (Any) -> Iterable[Packet]
@@ -307,7 +331,10 @@ class UDS_ServiceEnumerator(UDS_Enumerator):
         # default scan_range
         scan_range = kwargs.pop("scan_range",
                                 (x for x in range(0x100) if not x & 0x40))
-        return (UDS(service=x) for x in scan_range)
+        request_length = kwargs.pop("request_length", 1)
+        return itertools.chain.from_iterable(
+            ([UDS(service=x) / Raw(b"\x00" * req_len)
+              for req_len in range(request_length)] for x in scan_range))
 
     def _evaluate_response(self,
                            state,  # type: EcuState
@@ -328,7 +355,8 @@ class UDS_ServiceEnumerator(UDS_Enumerator):
 
     def _get_table_entry_y(self, tup):
         # type: (_AutomotiveTestCaseScanResult) -> str
-        return "0x%02x: %s" % (tup[1].service, tup[1].sprintf("%UDS.service%"))
+        return "0x%02x-%d: %s" % (
+            tup[1].service, len(tup[1]), tup[1].sprintf("%UDS.service%"))
 
 
 class UDS_RDBIEnumerator(UDS_Enumerator):
@@ -549,7 +577,7 @@ class UDS_SAEnumerator(UDS_Enumerator):
             # a required time delay not expired could have been received
             # on the previous attempt
             if not global_configuration.unittest:
-                time.sleep(11)
+                global_configuration.stop_event.wait(11)
 
     def _evaluate_retry(self,
                         state,  # type: EcuState
@@ -704,10 +732,7 @@ class UDS_SA_XOR_Enumerator(UDS_SAEnumerator, StateGenerator):
 
     def transition_function(self, sock, _, kwargs):
         # type: (_SocketUnion, AutomotiveTestCaseExecutorConfiguration, Dict[str, Any]) -> bool  # noqa: E501
-        if six.PY3:
-            spec = inspect.getfullargspec(self.get_security_access)
-        else:
-            spec = inspect.getargspec(self.get_security_access)
+        spec = inspect.getfullargspec(self.get_security_access)
 
         func_kwargs = {k: kwargs[k] for k in spec.args if k in kwargs.keys()}
         return self.get_security_access(sock, **func_kwargs)

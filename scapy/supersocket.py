@@ -7,7 +7,6 @@
 SuperSocket.
 """
 
-from __future__ import absolute_import
 from select import select, error as select_error
 import ctypes
 import errno
@@ -21,7 +20,6 @@ from scapy.data import MTU, ETH_P_IP, SOL_PACKET, SO_TIMESTAMPNS
 from scapy.compat import raw
 from scapy.error import warning, log_runtime
 from scapy.interfaces import network_name
-import scapy.libs.six as six
 from scapy.packet import Packet
 import scapy.packet
 from scapy.plist import (
@@ -33,7 +31,7 @@ from scapy.utils import PcapReader, tcpdump
 
 # Typing imports
 from scapy.interfaces import _GlobInterfaceType
-from scapy.compat import (
+from typing import (
     Any,
     Iterator,
     List,
@@ -41,13 +39,12 @@ from scapy.compat import (
     Tuple,
     Type,
     cast,
-    _Generic_metaclass
 )
 
 # Utils
 
 
-class _SuperSocket_metaclass(_Generic_metaclass):
+class _SuperSocket_metaclass(type):
     desc = None   # type: Optional[str]
 
     def __repr__(self):
@@ -79,8 +76,7 @@ class tpacket_auxdata(ctypes.Structure):
 
 # SuperSocket
 
-@six.add_metaclass(_SuperSocket_metaclass)
-class SuperSocket:
+class SuperSocket(metaclass=_SuperSocket_metaclass):
     closed = False  # type: bool
     nonblocking_socket = False  # type: bool
     auxdata_available = False   # type: bool
@@ -111,7 +107,7 @@ class SuperSocket:
         else:
             return 0
 
-    if six.PY2 or WINDOWS:
+    if WINDOWS:
         def _recv_raw(self, sock, x):
             # type: (socket.socket, int) -> Tuple[bytes, Any, Optional[float]]
             """Internal function to receive a Packet"""
@@ -304,21 +300,20 @@ if not WINDOWS:
                 self.ins.bind((iface, type))
             else:
                 self.iface = "any"
-            if not six.PY2:
-                try:
-                    # Receive Auxiliary Data (VLAN tags)
-                    self.ins.setsockopt(SOL_PACKET, PACKET_AUXDATA, 1)
-                    self.ins.setsockopt(
-                        socket.SOL_SOCKET,
-                        SO_TIMESTAMPNS,
-                        1
-                    )
-                    self.auxdata_available = True
-                except OSError:
-                    # Note: Auxiliary Data is only supported since
-                    #       Linux 2.6.21
-                    msg = "Your Linux Kernel does not support Auxiliary Data!"
-                    log_runtime.info(msg)
+            try:
+                # Receive Auxiliary Data (VLAN tags)
+                self.ins.setsockopt(SOL_PACKET, PACKET_AUXDATA, 1)
+                self.ins.setsockopt(
+                    socket.SOL_SOCKET,
+                    SO_TIMESTAMPNS,
+                    1
+                )
+                self.auxdata_available = True
+            except OSError:
+                # Note: Auxiliary Data is only supported since
+                #       Linux 2.6.21
+                msg = "Your Linux Kernel does not support Auxiliary Data!"
+                log_runtime.info(msg)
 
         def recv(self, x=MTU):
             # type: (int) -> Optional[Packet]
@@ -528,7 +523,7 @@ class IterSocket(SuperSocket):
                     yield r
             self.iter = _iter()
         elif isinstance(obj, (list, PacketList)):
-            if isinstance(obj[0], bytes):  # type: ignore
+            if isinstance(obj[0], bytes):
                 self.iter = iter(obj)
             else:
                 self.iter = (y for x in obj for y in x)

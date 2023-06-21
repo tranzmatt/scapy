@@ -10,16 +10,25 @@
 import abc
 from collections import defaultdict
 
-from scapy.compat import Any, Union, List, Optional, \
-    Dict, Tuple, Set, Callable, TYPE_CHECKING
 from scapy.utils import make_lined_table, SingleConversationSocket
-import scapy.libs.six as six
 from scapy.supersocket import SuperSocket
 from scapy.contrib.automotive.scanner.graph import _Edge
 from scapy.contrib.automotive.ecu import EcuState, EcuResponse
 from scapy.error import Scapy_Exception
 
 
+# Typing imports
+from typing import (
+    Any,
+    Union,
+    List,
+    Optional,
+    Dict,
+    Tuple,
+    Set,
+    Callable,
+    TYPE_CHECKING,
+)
 if TYPE_CHECKING:
     from scapy.contrib.automotive.scanner.configuration import AutomotiveTestCaseExecutorConfiguration  # noqa: E501
 
@@ -31,8 +40,7 @@ _CleanupCallable = Callable[[_SocketUnion, "AutomotiveTestCaseExecutorConfigurat
 _TransitionTuple = Tuple[_TransitionCallable, Dict[str, Any], Optional[_CleanupCallable]]  # noqa: E501
 
 
-@six.add_metaclass(abc.ABCMeta)
-class AutomotiveTestCaseABC:
+class AutomotiveTestCaseABC(metaclass=abc.ABCMeta):
     """
     Base class for "TestCase" objects. In automotive scanners, these TestCase
     objects are used for individual tasks, for example enumerating over one
@@ -211,7 +219,7 @@ class AutomotiveTestCase(AutomotiveTestCaseABC):
         completed = [(state, self._state_completed[state])
                      for state in self.scanned_states]
         return make_lined_table(
-            completed, lambda tup: ("Scan state completed", tup[0], tup[1]),
+            completed, lambda x, y: ("Scan state completed", x, y),
             dump=True) or ""
 
     def show(self, dump=False, filtered=True, verbose=False):
@@ -229,16 +237,14 @@ class AutomotiveTestCase(AutomotiveTestCaseABC):
             return None
 
 
-@six.add_metaclass(abc.ABCMeta)
-class TestCaseGenerator:
+class TestCaseGenerator(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def get_generated_test_case(self):
         # type: () -> Optional[AutomotiveTestCaseABC]
         raise NotImplementedError()
 
 
-@six.add_metaclass(abc.ABCMeta)
-class StateGenerator:
+class StateGenerator(metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def get_new_edge(self, socket, config):

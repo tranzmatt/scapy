@@ -53,9 +53,19 @@ from scapy import _parse_tag, _version_from_git_describe
 from scapy.config import _version_checker
 
 b = Bunch(returncode=0, communicate=lambda *args, **kargs: (b"v2.4.5rc1-261-g44b98e14", None))
-with mock.patch('scapy.subprocess.Popen', return_value=b) as popen:
-    class GitModuleScapy(object):
-        __version__ = _version_from_git_describe()
+with mock.patch('scapy.subprocess.Popen', return_value=b):
+    with mock.patch('scapy.os.path.isdir', return_value=True):
+        class GitModuleScapy(object):
+            __version__ = _version_from_git_describe()
+
+# GH3847
+with mock.patch('scapy.subprocess.Popen', return_value=b):
+    with mock.patch('scapy.os.path.isdir', return_value=False):
+        try:
+            _version_from_git_describe()
+            assert False
+        except ValueError:
+            pass
 
 assert GitModuleScapy.__version__ == '2.4.5rc1.dev261'
 assert _version_checker(GitModuleScapy, (2, 4, 5))
@@ -215,7 +225,7 @@ except:
 assert not conf.use_bpf
 
 = Configuration conf.use_pcap
-~ linux
+~ linux libpcap
 
 if not conf.use_pcap:
     assert not conf.iface.provider.libpcap
@@ -263,7 +273,7 @@ bytes_hex(get_if_raw_addr(conf.iface))
 
 def get_dummy_interface():
     """Returns a dummy network interface"""
-    IFACES._add_fake_iface("dummy0")
+    conf.ifaces._add_fake_iface("dummy0")
     return "dummy0"
 
 get_if_raw_addr(get_dummy_interface())
@@ -420,17 +430,7 @@ assert (ARP(ptype=0, pdst="hello. this isn't a valid IP")).route()[0] is None
 = plain_str test
 
 data = b"\xffsweet\xef celestia\xab"
-if not six.PY2:
-    # Only Python 3 has to deal with Str/Bytes conversion,
-    # as we don't use Python 2's unicode
-    if sys.version_info[0:2] <= (3, 4):
-        # Python3.4 can only ignore unknown special characters
-        assert plain_str(data) == "sweet celestia"
-    else:
-        # Python >3.4 can replace them with a backslash representation
-        assert plain_str(data) == "\\xffsweet\\xef celestia\\xab"
-else:
-    assert plain_str(data) == "\xffsweet\xef celestia\xab"
+assert plain_str(data) == "\\xffsweet\\xef celestia\\xab"
 
 ############
 ############
@@ -443,16 +443,6 @@ hex_data = bytes_hex(monty_data)
 assert hex_data == b'53746f70212057686f20617070726f61636865732074686520427269646765206f66204465617468206d75737420616e73776572206d65207468657365207175657374696f6e732074687265652c202765726520746865206f746865722073696465206865207365652e'
 assert hex_bytes(hex_data) == monty_data
 
-= test gzip_decompress/gzip_compress
-
-from scapy.compat import gzip_compress, gzip_decompress
-
-gziped_data = b"\x1f\x8b\x08\x00N\xf5\xd7\\\x02\xff\x1d\x8b9\x0e\x800\x0c\x04\xbf\xb2T4\x88G ~@A\x1d\x91\x85\xa4H\x1cl#\xbe\xcf\xd1\xac4\x9a\xd9\xc5\xa5uX\x93 \xb4\xa6\x12\xb6D\x83'b\xd2\x1c\x0fBv\xcc\x0c\x9eP.s\x84j7\x15\x85_b\xc4y\xd1<K\xfd.J\x0e\xe8\xa9\xbf\x83\xbc\xa3\xb0\x1c\x89\x97\x8c\x1c\x1fc\xbeS\\j\x00\x00\x00"
-assert gzip_decompress(gziped_data) == monty_data
-
-data = b"sweet celestia"
-assert gzip_decompress(gzip_compress(data)) == data
-
 = orb/chb
 
 assert orb(b"\x01"[0]) == 1
@@ -464,12 +454,12 @@ assert chb(1) == b"\x01"
 
 = Pickle and unpickle a packet
 
-import scapy.libs.six as six
+import pickle
 
 a = IP(dst="192.168.0.1")/UDP()
 
-b = six.moves.cPickle.dumps(a)
-c = six.moves.cPickle.loads(b)
+b = pickle.dumps(a)
+c = pickle.loads(b)
 
 assert c[IP].dst == "192.168.0.1"
 assert raw(c) == raw(a)
@@ -485,15 +475,17 @@ except SystemExit:
 
 = Session test
 
+import builtins
+
 # This is automatic when using the console
 def get_var(var):
-    return six.moves.builtins.__dict__["scapy_session"][var]
+    return builtins.__dict__["scapy_session"][var]
 
 def set_var(var, value):
-    six.moves.builtins.__dict__["scapy_session"][var] = value
+    builtins.__dict__["scapy_session"][var] = value
 
 def del_var(var):
-    del six.moves.builtins.__dict__["scapy_session"][var]
+    del builtins.__dict__["scapy_session"][var]
 
 init_session(None, {"init_value": 123})
 set_var("test_value", "8.8.8.8") # test_value = "8.8.8.8"
@@ -771,6 +763,11 @@ expected_ret2 = """
 assert ret1 != ret2
 assert expected_ret1 in ret1
 assert expected_ret2 in ret2
+
+# Test corner cases that should not crash
+
+hexdiff(b"abc", IP() / TCP())
+hexdiff(IP() / TCP(), b"abc")
 
 = Test mysummary functions - Ether
 
@@ -1699,10 +1696,6 @@ def _test():
     with no_debug_dissector():
         ans,unans=sr(IP(dst="www.google.com/30")/TCP(dport=[80,443]), timeout=2)
     
-    # Backward compatibility: Python 2 only
-    if six.PY2:
-        exec("""ans.make_table(lambda (s, r): (s.dst, s.dport, r.sprintf("{TCP:%TCP.flags%}{ICMP:%ICMP.code%}")))""")
-    
     # New format: all Python versions
     ans.make_table(lambda s, r: (s.dst, s.dport, r.sprintf("{TCP:%TCP.flags%}{ICMP:%ICMP.code%}")))
 
@@ -2047,15 +2040,18 @@ os.unlink(filename)
 
 pcapng_data = b'\n\r\r\n`\x00\x00\x00M<+\x1a\x01\x00\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff\x04\x009\x00TShark (Wireshark) 3.2.3 (Git v3.2.3 packaged as 3.2.3-1)\x00\x00\x00\x00\x00\x00\x00`\x00\x00\x00\x01\x00\x00\x00\x14\x00\x00\x00\xe4\x00\x00\x00\xff\xff\x00\x00\x14\x00\x00\x00\x06\x00\x00\x00<\x00\x00\x00\x00\x00\x00\x00\x98\xcd\x05\x00\x19\x83\xf7\x9e\x1c\x00\x00\x00\x1c\x00\x00\x00E\x00\x00\x1c\x00\x01\x00\x00@\x11|\xce\x7f\x00\x00\x01\x7f\x00\x00\x01\x005\x005\x00\x08\x01r<\x00\x00\x00'
 
-fdesc, filename = tempfile.mkstemp()
-os.close(fdesc)
-fd = open(filename, "wb")
-fd.write(pcapng_data)
-fd.close()
-
-packets = sniff(offline=filename, filter="udp")
-os.unlink(filename)
-assert UDP in packets[0]
+if OPENBSD:
+    # Note: OpenBSD tcpdump does not support PcapNg
+    assert True
+else:
+    fdesc, filename = tempfile.mkstemp()
+    os.close(fdesc)
+    fd = open(filename, "wb")
+    fd.write(pcapng_data)
+    fd.close()
+    packets = sniff(offline=filename, filter="udp")
+    os.unlink(filename)
+    assert UDP in packets[0]
 
 = Check offline sniff() with Packets and tcpdump with a filter
 ~ tcpdump libpcap
@@ -2229,6 +2225,19 @@ assert len([p for p in RawPcapReader(fd)]) == 1
 
 for (x, y) in RawPcapReader(fd):
     pass
+
+= Check RawPcapReader with a Context Manager
+~ pcap
+
+filename = get_temp_file(fd=False)
+wrpcap(filename, [IP()/TCP(), IP()/UDP()])
+
+try:
+    with RawPcapReader(filename) as reader:
+        packet = next(reader, None)
+    assert True
+except TypeError:
+    assert False
 
 = Check RawPcapWriter
 ~ pcap
@@ -2912,7 +2921,7 @@ def valid_output_read_routes6(routes):
     for destination, plen, next_hop, dev, cset, me  in routes:
         if not in6_isvalid(destination) or not type(plen) == int:
             return False
-        if not in6_isvalid(next_hop) or not isinstance(dev, six.string_types):
+        if not in6_isvalid(next_hop) or not isinstance(dev, str):
             return False
         for address in cset:
             if not in6_isvalid(address):
@@ -3289,10 +3298,9 @@ test_netbsd_7_0()
 
 import scapy
 
-IFACES._add_fake_iface("enp3s0")
-IFACES._add_fake_iface("lo")
+conf.ifaces._add_fake_iface("enp3s0")
+conf.ifaces._add_fake_iface("lo")
 
-old_routes = conf.route.routes
 old_iface = conf.iface
 old_loopback = conf.loopback_name
 try:
@@ -3319,17 +3327,15 @@ try:
 finally:
     conf.loopback_name = old_loopback
     conf.iface = old_iface
-    conf.route.routes = old_routes
-    conf.route.invalidate_cache()
-    IFACES.reload()
+    conf.route.resync()
+    conf.ifaces.reload()
 
 
 = Mocked IPv6 routes calls
 
-IFACES._add_fake_iface("enp3s0")
-IFACES._add_fake_iface("lo")
+conf.ifaces._add_fake_iface("enp3s0")
+conf.ifaces._add_fake_iface("lo")
 
-old_routes = conf.route6.routes
 old_iface = conf.iface
 old_loopback = conf.loopback_name
 try:
@@ -3358,6 +3364,7 @@ finally:
     conf.loopback_name = old_loopback
     conf.iface = old_iface
     conf.route6.resync()
+    conf.ifaces.reload()
 
 = Find a link-local address when conf.iface does not support IPv6
 
@@ -3883,6 +3890,9 @@ conf.route.routes = [
 assert sorted(conf.route.get_if_bcast(dummy_interface)) == sorted(['169.254.255.255', '172.21.230.255', '239.255.255.255'])
 conf.route.routes = bck_conf_route_routes
 
+= Remove dummy interface
+
+conf.ifaces.reload()
 
 ############
 ############
@@ -4038,7 +4048,7 @@ os.write(fd, b"-- MIB test\nscapy       OBJECT IDENTIFIER ::= {test 2807}\n")
 os.close(fd)
 
 load_mib(fname)
-assert sum(1 for k in six.itervalues(conf.mib.d) if "scapy" in k) == 1
+assert sum(1 for k in conf.mib.d.values() if "scapy" in k) == 1
 
 assert sum(1 for oid in conf.mib) > 100
 
@@ -4550,7 +4560,7 @@ def test_multiplot(mock_plt):
     mock_plt.plot = fake_plot
     tmp = [IP(id=i)/TCP() for i in range(10)]
     plist = PacketList([tuple(tmp[i-2:i]) for i in range(2, 10, 2)])
-    lines = plist.multiplot(lambda x: (x[1][IP].src, (x[1].time, x[1][IP].id)))
+    lines = plist.multiplot(lambda x, y: (y[IP].src, (y.time, y[IP].id)))
     assert len(lines) == 1
     assert len(lines[0]) == 4
 
@@ -4639,11 +4649,11 @@ test_padding()
 
 def test_nzpadding():
     with ContextManagerCaptureOutput() as cmco:
-        p = PacketList([IP()/conf.padding_layer("A%s" % i) for i in range(2)])
+        p = PacketList([IP()/conf.padding_layer("AB"), IP()/conf.padding_layer("\x00\x00")])
         p.nzpadding()
         result_pl_nzpadding = cmco.get_output()
-    assert len(result_pl_nzpadding.split('\n')) == 5
-    assert "0000  41 30" in result_pl_nzpadding
+    assert len(result_pl_nzpadding.split('\n')) == 3
+    assert "0000  41 42" in result_pl_nzpadding
 
 test_nzpadding()
 
@@ -4718,7 +4728,7 @@ if PYX:
 = svgdump()
 
 print("PYX: %d" % PYX)
-if PYX and not six.PY2:
+if PYX:
     import tempfile
     import os
     filename = tempfile.mktemp(suffix=".svg")
@@ -4754,18 +4764,34 @@ assert pl[1][Ether].dst == '00:22:33:44:55:66'
 = _version()
 
 import os
-version_filename = os.path.join(scapy._SCAPY_PKG_DIR, "VERSION")
+from datetime import datetime
 
+version_filename = os.path.join(scapy._SCAPY_PKG_DIR, "VERSION")
+mtime = datetime.utcfromtimestamp(os.path.getmtime(scapy.__file__))
 version = "2.0.0"
 with open(version_filename, "w") as fd:
     fd.write(version)
 
+os.environ["SCAPY_VERSION"] = "9.9.9"
+assert scapy._version() == "9.9.9"
+del os.environ["SCAPY_VERSION"]
+
+assert scapy._version() == version
+os.unlink(version_filename)
+
 import mock
-with mock.patch("scapy._version_from_git_describe") as version_mocked:
-    version_mocked.side_effect = Exception()
-    assert scapy._version() == version
-    os.unlink(version_filename)
-    assert scapy._version() == "unknown.version"
+with mock.patch("scapy._version_from_git_archive") as archive:
+    archive.return_value = "4.4.4"
+    assert scapy._version() == "4.4.4"
+    archive.side_effect = ValueError()
+    with mock.patch("scapy._version_from_git_describe") as git:
+        git.return_value = "3.3.3"
+        assert scapy._version() == "3.3.3"
+        git.side_effect = Exception()
+        assert scapy._version() == mtime.strftime("%Y.%m.%d")
+        with mock.patch("os.path.getmtime") as getmtime:
+            getmtime.side_effect = Exception()
+            assert scapy._version() == "0.0.0"
 
 
 = UTscapy HTML output

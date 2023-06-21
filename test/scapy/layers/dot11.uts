@@ -61,6 +61,18 @@ assert Dot11Elt(info="scapy").summary() == "SSID='scapy'"
 assert Dot11Elt(ID=1).mysummary() == ""
 assert Dot11(b'\x84\x00\x00\x00\x00\x11\x22\x33\x44\x55\x00\x11\x22\x33\x44\x55').addr2 == '00:11:22:33:44:55'
 
+= Dot11 - type 1 subtype 4, 5, 6
+
+assert raw(Dot11(type=1, subtype=4, addr2="ff:ff:ff:ff:ff:ff")) == b'D\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff'
+assert raw(Dot11(type=1, subtype=5, addr2="ff:ff:ff:ff:ff:ff")) == b'T\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff'
+assert raw(Dot11(type=1, subtype=6, addr2="ff:ff:ff:ff:ff:ff", cfe=3)) == b'd0\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff'
+assert raw(Dot11(type=1, subtype=6, addr2="ff:ff:ff:ff:ff:ff", cfe=6, addr3="aa:aa:aa:aa:aa:aa")) == b'd`\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff\xff\xaa\xaa\xaa\xaa\xaa\xaa'
+
+assert Dot11(type=1, subtype=5).address_meaning(1) == 'RA'
+assert Dot11(type=1, subtype=6, cfe=5).address_meaning(2) == 'TA'
+assert Dot11(type=1, subtype=6, cfe=6).address_meaning(2) == 'NAV-SA'
+assert Dot11(type=1, subtype=6, cfe=6).address_meaning(3) == 'NAV-DA'
+
 = Multiple Dot11Elt layers
 pkt = Dot11() / Dot11Beacon() / Dot11Elt(ID="Supported Rates") / Dot11Elt(ID="SSID", info="Scapy")
 assert pkt[Dot11Elt::{"ID": 0}].info == b"Scapy"
@@ -431,6 +443,7 @@ assert f.RU_channel2 == [114, 114, 114, 114]
 assert f.lsig_data1.length
 assert f.lsig_length == 182
 assert f.lsig_rate == 0
+assert f == eval(f.command())
 
 = Reassociation request
 f = Dot11(b' \x00:\x01@\xe3\xd6\x7f*\x00\x00\x10\x18\xa9l.@\xe3\xd6\x7f*\x00 \t1\x04\n\x00@\xe3\xd6\x7f*\x00\x00\x064.2.12\x01\x08\x82\x84\x0b\x16$0Hl!\x02\x08\x1a$\x02\x01\x0b0&\x01\x00\x00\x0f\xac\x04\x01\x00\x00\x0f\xac\x04\x01\x00\x00\x0f\xac\x01\x00\x00\x01\x00LD\xfe\xf2l\xdcV\xce\x0b7\xab\xc62\x02O\x112\x04\x0c\x12\x18`\x7f\x08\x01\x00\x00\x00\x00\x00\x00@\xdd\t\x00\x10\x18\x02\x00\x00\x10\x00\x00')
@@ -542,6 +555,11 @@ assert r.dBm_AntSignal == -30
 assert r.Lock_Quality == 100
 assert r.RXFlags == 0
 
+data = b'\x00\x00\x0f\x00\x00\x00\x00\x02\xff\x7f?\x00\x00\x04\x00'
+r = RadioTap(data)
+repr(r)
+assert list(r.hemuou_per_user_known) == ['NSTS']
+
 = RadioTap - Dissection - guess_payload_class() test
 data = b'\x00\x00\r\x00\x04\x80\x02\x00\x02\x00\x00\x00\x00@\x00\x00\x00\xff\xff\xff\xff\xff\xff\xe8\x94\xf6\x1c\xdf\x8b\xff\xff\xff\xff\xff\xff\xa0\x01\x00\x10ciscosb-wpa2-eap\x01\x08\x02\x04\x0b\x16\x0c\x12\x18$2\x040H`l\x03\x01\x01-\x1an\x11\x1b\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 radiotap = RadioTap(data)
@@ -626,3 +644,106 @@ assert Dot11EltMicrosoftWPA(raw(Dot11EltMicrosoftWPA())).nb_akm_suites == 1
 assert Dot11EltMicrosoftWPA(raw(Dot11EltMicrosoftWPA(akm_suites=[AKMSuite(suite="PSK")]))).nb_akm_suites == 1
 assert Dot11EltMicrosoftWPA(raw(Dot11EltMicrosoftWPA(akm_suites=[AKMSuite(suite="PSK"), AKMSuite(suite="802.1X")]))).nb_akm_suites == 2
 
+= Dot11BSSTMRequest - dissection
+
+pkt = RadioTap(b"\x00\x008\x00/@@\xa0 \x08\x00\xa0 \x08\x00\x00\x7f\x89&\x88\x00\x00\x00\x00\x10\x0c\xcc\x15@\x01\xe4\x00\x00\x00\x00\x00\x00\x00\x00\x00\x8f\xe7&\x88\x00\x00\x00\x00\x16\x00\x11\x03\xe4\x00\xde\x01\xd0\x00<\x00\x92U\x1f\xe9g9J\xf2\x1c\x03)\x89J\xf2\x1c\x03)\x89\xc0\xce\n\x07\x01\x05\x05\x00\xff4\x10F\xf2\x1c\x03)\x89\x00\x00\x00\x00Q\x0b\x00\x03\x01\xff\xaaV\xdaY")
+assert Dot11BSSTMRequest in pkt
+
+assert pkt[Dot11Action].category == 10
+assert pkt[Dot11Action][Dot11WNM].action == 7
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].token == 1
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].mode.Preferred_Candidate_List_Included
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].mode.Disassociation_Imminent
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].disassociation_timer == 5
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].validity_interval == 255
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].type == 52
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].len == 16
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].BSSID == "46:f2:1c:03:29:89"
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].AP_reach == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].security == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].key_scope == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].capabilities == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].mobility == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].HT == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].VHT == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].FTM == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].reserved == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].op_class == 81
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].channel == 11
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMRequest].neighbor_report[0].phy_type == 0
+
+= Dot11BSSTMResponse - dissection
+
+pkt = RadioTap(b"\x00\x00,\x00\xae@\x00\xa0 \x08\x00\xa0 \x08\x00\xa0 \x08\x00\xa0 \x08\x00\x00\x10\x0c<\x14@\x01\xce\x00d\x00\x00\x00\xd0\x00\xca\x01\xca\x02\xcc\x03\xd0\x00<\x00df$J\xe1\xc4\xa0\xcc+\xbe\xc9Odf$J\xe1\xc4p\x0c\n\x08\x01\x06\x004\rdf$J\xe1\xc3\x00\x00\x00\x00\x04\x0c\x00<\xdd\xdf=")
+assert Dot11BSSTMResponse in pkt
+
+assert pkt[Dot11Action].category == 10
+assert pkt[Dot11Action][Dot11WNM].action == 8
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].token == 1
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].status == 6
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].termination_delay == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].type == 52
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].len == 13
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].BSSID == "64:66:24:4a:e1:c3"
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].AP_reach == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].security == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].key_scope == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].capabilities == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].mobility == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].HT == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].VHT == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].FTM == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].reserved == 0
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].op_class == 4
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].channel == 12
+assert pkt[Dot11Action][Dot11WNM][Dot11BSSTMResponse].neighbor_report[0].phy_type == 0
+
+= Dot11Ack
+
+pkt = Dot11(bytes(Dot11()/Dot11Ack()))
+assert pkt.subtype == 13
+assert pkt.type == 1
+
+= Dot11CSA
+
+pkt = RadioTap(b"\x00\x008\x00/@@\xa0 \x08\x00\xa0 \x08\x00\x00\xfe\x83\x06\x10\x00\x00\x00\x00\x10\x02\x8a\t\xa0\x00\xfe\x00\x00\x00\x00\x00\x00\x00\x00\x00\x006\x07\x10\x00\x00\x00\x00\x16\x00\x11\x03\xf8\x00\xfe\x01\xd0\x00\x00\x00\xff\xff\xff\xff\xff\xff\x0cs)d\xa5\r\x0cs)d\xa5\r\xb0!\x00\x04%\x03\x01\x0b\x05\x0b\xb9<\x8c")
+assert Dot11SpectrumManagement in pkt
+assert Dot11CSA in pkt
+assert Dot11EltCSA in pkt
+
+assert pkt[Dot11Action].category == 0
+assert pkt[Dot11Action][Dot11SpectrumManagement].action == 4
+assert pkt[Dot11Action][Dot11SpectrumManagement][Dot11CSA][Dot11EltCSA].ID == 37
+assert pkt[Dot11Action][Dot11SpectrumManagement][Dot11CSA][Dot11EltCSA].len == 3
+assert pkt[Dot11Action][Dot11SpectrumManagement][Dot11CSA][Dot11EltCSA].mode == 1
+assert pkt[Dot11Action][Dot11SpectrumManagement][Dot11CSA][Dot11EltCSA].new_channel == 11
+assert pkt[Dot11Action][Dot11SpectrumManagement][Dot11CSA][Dot11EltCSA].channel_switch_count == 5
+
+= Dot11OBSS
+
+data = b'\x00\x008\x00/@@\xa0 \x08\x00\xa0 \x08\x00\x00\x7fB\xe9\n\x00\x00\x00\x00\x10\x16l\t\xa0\x00\xc3\x00\x00\x00\x00\x00\x00\x00\x00\x00\xbf\x9b\xe9\n\x00\x00\x00\x00\x16\x00\x11\x03\xc3\x00\xbf\x01\x80\x00\x00\x00\xff\xff\xff\xff\xff\xff`\x8d&\xa6\xd6\x04`\x8d&\xa6\xd6\x04@S\xe2\xb0\x04\x00\x00\x00\x00\x00d\x00\x11\x14\x00\rArc-QA-Lab-2G\x01\x08\x82\x84\x8b\x96$0Hl\x03\x01\x01\x05\x04\x02\x03\x00\x00\x07\x06AE \x01\r\x14#\x02\x19\x00*\x01\x042\x04\x0c\x12\x18`0\x18\x01\x00\x00\x0f\xac\x04\x01\x00\x00\x0f\xac\x04\x02\x00\x00\x0f\xac\x02\x00\x0f\xac\x04\x0c\x00\x0b\x05\x00\x00\xc1\x00\x00F\x053\x00\x00\x00\x006\x03d\x00\x00-\x1a\xef\x19\x17\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00=\x16\x01\x08\x11\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00J\x0e\x14\x00\n\x00,\x01\xc8\x00\x14\x00\x05\x00\x19\x00\x7f\n\x05\x00\x08\x80\x00\x00\x00@\x00@\xff #\x05\x00\x08\x12\x00\x10" \x02\xc0\x0fB\x85\x10\x00\x0c\x00\xea\xff\xea\xffz\x1c\xc7q\x1c\xc7q\x1c\xc7q\xff\x07$\xf4?\x00\x02\xfc\xff\xff\x0e&\x00\x00\xa4\x08 \xa4\x08@C\x08`2\x08\xdd\x1d\x00P\xf2\x04\x10J\x00\x01\x10\x10D\x00\x01\x02\x10<\x00\x01\x03\x10I\x00\x06\x007*\x00\x01 \xdd\x1e\x00\x90L\x04\x18\xbf\x0c\xb1i\x8a\x0f\xea\xff\x00\x00\xea\xff\x00\x00\xc0\x05\x00\x01\x00\x00\x00\xc3\x02\x005\xdd\n\x00\x10\x18\x02\x00\x00\x1c\x00\x00\x01\xdd\x18\x00P\xf2\x02\x01\x01\x80\x00\x03\xa4\x00\x00\'\xa4\x00\x00BC^\x00b2/\x00l\x02\x7f\x00 \x8d\xf4\xe1'
+pkt = RadioTap(data)
+
+assert Dot11EltOBSS in pkt
+
+assert pkt[Dot11EltOBSS].ID == 74
+assert pkt[Dot11EltOBSS].len == 14
+assert pkt[Dot11EltOBSS].Passive_Dwell == 20
+assert pkt[Dot11EltOBSS].Active_Dwell == 10
+assert pkt[Dot11EltOBSS].Scan_Interval == 300
+assert pkt[Dot11EltOBSS].Passive_Total_Per_Channel == 200
+assert pkt[Dot11EltOBSS].Active_Total_Per_Channel == 20
+assert pkt[Dot11EltOBSS].Delay == 5
+assert pkt[Dot11EltOBSS].Activity_Threshold == 25
+
+= Dot11VHTOperation
+
+pkt = RadioTap(b"\x00\x008\x00/@@\xa0 \x08\x00\xa0 \x08\x00\x00K\x1178\x00\x00\x00\x00\x10\x0c<\x14@\x01\xba\x00\x00\x00\x00\x00\x00\x00\x00\x00\xffj78\x00\x00\x00\x00\x16\x00\x11\x03\xb6\x00\xba\x01\x80\x00\x00\x00\xff\xff\xff\xff\xff\xff`\x8d&\xa6\xd6\x05`\x8d&\xa6\xd6\x05\xb0i~\x96\x9e\x03\x00\x00\x00\x00d\x00\x11\x11\x00\rArc-QA-Lab-5G\x01\x08\x8c\x12\x98$\xb0H`l\x05\x04\x00\x03\x00\x00\x07<AE $\x01\x17(\x01\x17,\x01\x170\x01\x174\x01\x178\x01\x17<\x01\x17@\x01\x17d\x01\x1eh\x01\x1el\x01\x1ep\x01\x1et\x01\x1ex\x01\x1e|\x01\x1e\x80\x01\x1e\x84\x01\x1e\x88\x01\x1e\x8c\x01\x1e \x01\x00#\x02\x19\x000\x18\x01\x00\x00\x0f\xac\x04\x01\x00\x00\x0f\xac\x04\x02\x00\x00\x0f\xac\x02\x00\x0f\xac\x04\x0c\x00\x0b\x05\x00\x00\xad\x00\x00F\x053\x00\x00\x00\x006\x03d\x00\x00-\x1a\xef\x01\x17\xff\xff\xff\xff\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00=\x16$\x05\x11\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x7f\n\x04\x00\x08\x80\x01\x00\x00\xc0\x01@\xbf\x0c\xf5i\x8b\x0f\xaa\xff\x00\x00\xaa\xff\x00 \xc0\x05\x01*2\x00\x00\xc3\x05\x035555\xff'#\x05\x00\x08\x12\x00\x10L \x02\xc0o[\x85\x18\x00\x0c\x00\xaa\xff\xaa\xff\xaa\xff\xaa\xff{\x1c\xc7q\x1c\xc7q\x1c\xc7q\x1c\xc7q\xff\x07$\xf4?\x00;\xfc\xff\xff\x0e&\x04\x00\xa4\x08 \xa4\x08@C\x08`2\x08\xdd\x1d\x00P\xf2\x04\x10J\x00\x01\x10\x10D\x00\x01\x02\x10<\x00\x01\x03\x10I\x00\x06\x007*\x00\x01 \xdd\x05\x00\x90L\x04\x17\xdd\n\x00\x10\x18\x02\x00\x00\x1c\x00\x00\x01\xdd\x18\x00P\xf2\x02\x01\x01\x84\x00\x03\xa4\x00\x00'\xa4\x00\x00BC^\x00b2/\x00l\x02\x7f\x00I=\xa4/")
+assert Dot11EltVHTOperation in pkt
+assert Dot11VHTOperationInfo in pkt
+
+assert pkt[Dot11EltVHTOperation].ID == 192
+assert pkt[Dot11EltVHTOperation].VHT_Operation_Info
+assert pkt[Dot11EltVHTOperation].VHT_Operation_Info.channel_width == 1
+assert pkt[Dot11EltVHTOperation].VHT_Operation_Info.channel_center0 == 42
+assert pkt[Dot11EltVHTOperation].VHT_Operation_Info.channel_center1 == 50

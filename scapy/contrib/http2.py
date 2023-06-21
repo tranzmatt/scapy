@@ -18,20 +18,25 @@ and HPack encoded headers
 
 # base_classes triggers an unwanted import warning
 
-from __future__ import absolute_import
-from __future__ import print_function
 import abc
 import re
 from io import BytesIO
 import struct
-import scapy.libs.six as six
 from scapy.compat import raw, plain_str, hex_bytes, orb, chb, bytes_encode
 
 # Only required if using mypy-lang for static typing
 # Most symbols are used in mypy-interpreted "comments".
 # Sized must be one of the superclasses of a class implementing __len__
-from scapy.compat import Optional, List, Union, Callable, Any, \
-    Tuple, Sized, Pattern  # noqa: F401
+from typing import (
+    Optional,
+    List,
+    Union,
+    Callable,
+    Any,
+    Tuple,
+    Sized,
+    Pattern,
+)
 from scapy.base_classes import Packet_metaclass  # noqa: F401
 
 import scapy.fields as fields
@@ -96,7 +101,7 @@ class HPackMagicBitField(fields.BitField):
         assert (
             isinstance(r, tuple) and
             len(r) == 2 and
-            isinstance(r[1], six.integer_types)
+            isinstance(r[1], int)
         ), 'Second element of BitField.getfield return value expected to be an int or a long; API change detected'  # noqa: E501
         assert r[1] == self._magic, 'Invalid value parsed from s; error in class guessing detected!'  # noqa: E501
         return r
@@ -188,14 +193,14 @@ class AbstractUVarIntField(fields.Field):
         :return: None
         :raises: AssertionError
         """
-        assert default is None or (isinstance(default, six.integer_types) and default >= 0)  # noqa: E501
+        assert default is None or (isinstance(default, int) and default >= 0)
         assert 0 < size <= 8
         super(AbstractUVarIntField, self).__init__(name, default)
         self.size = size
         self._max_value = (1 << self.size) - 1
 
-        # Configuring the fake property that is useless for this class but that is  # noqa: E501
-        # expected from BitFields
+        # Configuring the fake property that is useless for this class
+        # but that is expected from BitFields
         self.rev = False
 
     def h2i(self, pkt, x):
@@ -206,7 +211,7 @@ class AbstractUVarIntField(fields.Field):
         :return: int|None: the converted value.
         :raises: AssertionError
         """
-        assert not isinstance(x, six.integer_types) or x >= 0
+        assert not isinstance(x, int) or x >= 0
         return x
 
     def i2h(self, pkt, x):
@@ -332,14 +337,14 @@ class AbstractUVarIntField(fields.Field):
         """
         if isinstance(x, type(None)):
             return x
-        if isinstance(x, six.integer_types):
+        if isinstance(x, int):
             assert x >= 0
             ret = self.h2i(pkt, x)
-            assert isinstance(ret, six.integer_types) and ret >= 0
+            assert isinstance(ret, int) and ret >= 0
             return ret
         elif isinstance(x, bytes):
             ret = self.m2i(pkt, x)
-            assert (isinstance(ret, six.integer_types) and ret >= 0)
+            assert (isinstance(ret, int) and ret >= 0)
             return ret
         assert False, 'EINVAL: x: No idea what the parameter format is'
 
@@ -632,8 +637,7 @@ class FieldUVarLenField(AbstractUVarIntField):
 ###############################################################################
 
 
-@six.add_metaclass(abc.ABCMeta)
-class HPackStringsInterface(Sized):  # type: ignore
+class HPackStringsInterface(Sized, metaclass=abc.ABCMeta):  # type: ignore
     @abc.abstractmethod
     def __str__(self):
         pass
@@ -2049,7 +2053,7 @@ class H2Frame(packet.Packet):
         :return: (str, str): the padding and the payload data strings
         :raises: AssertionError
         """
-        assert isinstance(self.len, six.integer_types) and self.len >= 0, 'Invalid length: negative len?'  # noqa: E501
+        assert isinstance(self.len, int) and self.len >= 0, 'Invalid length: negative len?'  # noqa: E501
         assert len(s) >= self.len, 'Invalid length: string too short for this length'  # noqa: E501
         return s[:self.len], s[self.len:]
 
@@ -2407,7 +2411,7 @@ class HPackHdrTable(Sized):
         If no matching header is found, this method returns None.
         """
         name = name.lower()
-        for key, val in six.iteritems(type(self)._static_entries):
+        for key, val in type(self)._static_entries.items():
             if val.name() == name:
                 return key
         for idx, val in enumerate(self._dynamic_table):
@@ -2426,7 +2430,7 @@ class HPackHdrTable(Sized):
         If no matching header is found, this method returns None.
         """
         name = name.lower()
-        for key, val in six.iteritems(type(self)._static_entries):
+        for key, val in type(self)._static_entries.items():
             if val.name() == name and val.value() == value:
                 return key
         for idx, val in enumerate(self._dynamic_table):

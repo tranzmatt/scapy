@@ -9,7 +9,6 @@
 Fields that hold random numbers.
 """
 
-from __future__ import absolute_import
 import copy
 import random
 import time
@@ -22,9 +21,8 @@ import string
 from scapy.base_classes import Net
 from scapy.compat import bytes_encode, chb, plain_str
 from scapy.utils import corrupt_bits, corrupt_bytes
-from scapy.libs.six.moves import zip_longest
 
-from scapy.compat import (
+from typing import (
     List,
     TypeVar,
     Generic,
@@ -510,12 +508,12 @@ class _RandString(RandField[_S], Generic[_S]):
         return self._fix() * n
 
 
-class RandString(_RandString[bytes]):
+class RandString(_RandString[str]):
     _DEFAULT_CHARS = (string.ascii_uppercase + string.ascii_lowercase +
-                      string.digits).encode("utf-8")
+                      string.digits)
 
     def __init__(self, size=None, chars=_DEFAULT_CHARS):
-        # type: (Optional[Union[int, RandNum]], bytes) -> None
+        # type: (Optional[Union[int, RandNum]], str) -> None
         if size is None:
             size = RandNumExpo(0.01)
         self.size = size
@@ -535,21 +533,22 @@ class RandString(_RandString[bytes]):
         return ret
 
     def _fix(self):
-        # type: () -> bytes
-        s = b""
+        # type: () -> str
+        s = ""
         for _ in range(int(self.size)):
-            rdm_chr = random.choice(self.chars)
-            s += rdm_chr if isinstance(rdm_chr, str) else chb(rdm_chr)
+            s += random.choice(self.chars)
         return s
 
 
-class RandBin(RandString):
-    def __init__(self, size=None):
-        # type: (Optional[Union[int, RandNum]]) -> None
-        super(RandBin, self).__init__(
-            size=size,
-            chars=b"".join(chb(c) for c in range(256))
-        )
+class RandBin(_RandString[bytes]):
+    _DEFAULT_CHARS = b"".join(chb(c) for c in range(256))
+
+    def __init__(self, size=None, chars=_DEFAULT_CHARS):
+        # type: (Optional[Union[int, RandNum]], bytes) -> None
+        if size is None:
+            size = RandNumExpo(0.01)
+        self.size = size
+        self.chars = chars
 
     def _command_args(self):
         # type: () -> str
@@ -561,6 +560,13 @@ class RandBin(RandString):
             # Default size for RandString, skip
             return ""
         return "size=%r" % self.size.command()
+
+    def _fix(self):
+        # type: () -> bytes
+        s = b""
+        for _ in range(int(self.size)):
+            s += struct.pack("!B", random.choice(self.chars))
+        return s
 
 
 class RandTermString(RandBin):
@@ -1191,7 +1197,7 @@ class RandUUID(RandField[uuid.UUID]):
             else:
                 # Invalid template
                 raise ValueError("UUID template is invalid")
-            rnd_f = [RandInt] + [RandShort] * 2 + [RandByte] * 8  # type: ignore  # noqa: E501
+            rnd_f = [RandInt] + [RandShort] * 2 + [RandByte] * 8
             uuid_template = []  # type: List[Union[int, RandNum]]
             for i, t in enumerate(template):
                 if t == "*":
@@ -1412,115 +1418,3 @@ class CorruptedBits(CorruptedBytes):
     def _fix(self):
         # type: () -> bytes
         return corrupt_bits(self.s, self.p, self.n)
-
-
-class CyclicPattern(VolatileValue[bytes]):
-    """
-    Generate a cyclic pattern
-
-    :param size: Size of generated pattern. Default is random size.
-    :param start: Start offset of the generated pattern.
-    :param charset_type: Charset types:
-                         0: basic (0-9A-Za-z)
-                         1: extended
-                         2: maximum (almost printable chars)
-
-
-    The code of this class was inspired by
-
-    PEDA - Python Exploit Development Assistance for GDB
-    Copyright (C) 2012 Long Le Dinh <longld at vnsecurity.net>
-    License: This work is licensed under a Creative Commons
-    Attribution-NonCommercial-ShareAlike 3.0 Unported License.
-    """
-
-    @staticmethod
-    def cyclic_pattern_charset(charset_type=None):
-        # type: (Optional[int]) -> str
-        """
-        :param charset_type: charset type
-                             0: basic (0-9A-Za-z)
-                             1: extended (default)
-                             2: maximum (almost printable chars)
-        :return: list of charset
-        """
-
-        charset = \
-            [string.ascii_uppercase, string.ascii_lowercase, string.digits]
-
-        if charset_type == 1:  # extended type
-            charset[1] = "%$-;" + re.sub("[sn]", "", charset[1])
-            charset[2] = "sn()" + charset[2]
-
-        if charset_type == 2:  # maximum type
-            charset += [string.punctuation]
-
-        return "".join(
-            ["".join(k) for k in zip_longest(*charset, fillvalue="")])
-
-    @staticmethod
-    def de_bruijn(charset, n, maxlen):
-        # type: (str, int, int) -> str
-        """
-        Generate the De Bruijn Sequence up to `maxlen` characters
-        for the charset `charset` and subsequences of length `n`.
-        Algorithm modified from wikipedia
-        https://en.wikipedia.org/wiki/De_Bruijn_sequence
-        """
-        k = len(charset)
-        a = [0] * k * n
-        sequence = []  # type: List[str]
-
-        def db(t, p):
-            # type: (int, int) -> None
-            if len(sequence) == maxlen:
-                return
-
-            if t > n:
-                if n % p == 0:
-                    for j in range(1, p + 1):
-                        sequence.append(charset[a[j]])
-                        if len(sequence) == maxlen:
-                            return
-            else:
-                a[t] = a[t - p]
-                db(t + 1, p)
-                for j in range(a[t - p] + 1, k):
-                    a[t] = j
-                    db(t + 1, t)
-
-        db(1, 1)
-        return ''.join(sequence)
-
-    def __init__(self, size=None, start=0, charset_type=None):
-        # type: (Optional[int], int, Optional[int]) -> None
-        self.size = size if size is not None else RandNumExpo(0.01)
-        self.start = start
-        self.charset_type = charset_type
-
-    def _command_args(self):
-        # type: () -> str
-        ret = ""
-        if isinstance(self.size, VolatileValue):
-            if self.size.lambd != 0.01 or self.size.base != 0:
-                ret += "size=%r" % self.size.command()
-        else:
-            ret += "size=%r" % self.size
-
-        if self.start != 0:
-            ret += ", start=%r" % self.start
-
-        if self.charset_type:
-            ret += ", charset_type=%r" % self.charset_type
-
-        return ret
-
-    def _fix(self):
-        # type: () -> bytes
-        if isinstance(self.size, VolatileValue):
-            size = self.size._fix()
-        else:
-            size = self.size
-        charset = self.cyclic_pattern_charset(self.charset_type or 0)
-        pattern = self.de_bruijn(charset, 3, size + self.start)
-        return pattern[self.start:size + self.start].encode('utf-8')

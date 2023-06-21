@@ -13,13 +13,12 @@ import time
 import copy
 from collections import defaultdict, OrderedDict
 from itertools import chain
+from typing import NamedTuple
 
-from scapy.compat import Any, Union, List, Optional, Iterable, \
-    Dict, Tuple, Set, Callable, cast, NamedTuple, orb
+from scapy.compat import orb
 from scapy.contrib.automotive import log_automotive
 from scapy.error import Scapy_Exception
 from scapy.utils import make_lined_table, EDecimal
-import scapy.libs.six as six
 from scapy.packet import Packet
 from scapy.contrib.automotive.ecu import EcuState, EcuResponse
 from scapy.contrib.automotive.scanner.test_case import AutomotiveTestCase, \
@@ -27,6 +26,20 @@ from scapy.contrib.automotive.scanner.test_case import AutomotiveTestCase, \
 from scapy.contrib.automotive.scanner.configuration import \
     AutomotiveTestCaseExecutorConfiguration
 from scapy.contrib.automotive.scanner.graph import _Edge
+
+# Typing imports
+from typing import (
+    Any,
+    Union,
+    List,
+    Optional,
+    Iterable,
+    Dict,
+    Tuple,
+    Set,
+    Callable,
+    cast,
+)
 
 # Definition outside the class ServiceEnumerator to allow pickling
 _AutomotiveTestCaseScanResult = NamedTuple(
@@ -46,8 +59,7 @@ _AutomotiveTestCaseFilteredScanResult = NamedTuple(
      ("resp_ts", Union[EDecimal, float])])
 
 
-@six.add_metaclass(abc.ABCMeta)
-class ServiceEnumerator(AutomotiveTestCase):
+class ServiceEnumerator(AutomotiveTestCase, metaclass=abc.ABCMeta):
     """
     Base class for ServiceEnumerators of automotive diagnostic protocols
     """
@@ -64,7 +76,7 @@ class ServiceEnumerator(AutomotiveTestCase):
         'exit_if_service_not_supported': (bool, None),
         'exit_scan_on_first_negative_response': (bool, None),
         'retry_if_busy_returncode': (bool, None),
-        'stop_event': (threading._Event if six.PY2 else threading.Event, None),  # type: ignore  # noqa: E501
+        'stop_event': (threading.Event, None),
         'debug': (bool, None),
         'scan_range': ((list, tuple, range), None),
         'unittest': (bool, None)
@@ -172,7 +184,7 @@ class ServiceEnumerator(AutomotiveTestCase):
     def __reduce__(self):  # type: ignore
         f, t, d = super(ServiceEnumerator, self).__reduce__()  # type: ignore
         try:
-            for k, v in six.iteritems(d["_request_iterators"]):
+            for k, v in d["_request_iterators"].items():
                 d["_request_iterators"][k] = list(v)
         except KeyError:
             pass
@@ -218,10 +230,14 @@ class ServiceEnumerator(AutomotiveTestCase):
         if isinstance(retry_entry, Packet):
             log_automotive.debug("Provide retry packet")
             return [retry_entry]
+        elif isinstance(retry_entry, list):
+            if len(retry_entry):
+                log_automotive.debug("Provide retry list")
         else:
             log_automotive.debug("Provide retry iterator")
             # assume self.retry_pkt is a generator or list
-            return retry_entry
+
+        return retry_entry
 
     def _get_initial_request_iterator(self, state, **kwargs):
         # type: (EcuState, Any) -> Iterable[Packet]
@@ -285,9 +301,9 @@ class ServiceEnumerator(AutomotiveTestCase):
 
         # log_automotive.debug("[i] Using iterator %s in state %s", it, state)
 
-        start_time = time.time()
+        start_time = time.monotonic()
         log_automotive.debug(
-            "Start execution of enumerator: %s", time.ctime(start_time))
+            "Start execution of enumerator: %s", time.ctime())
 
         for req in it:
             res = self.sr1_with_retry_on_error(req, socket, state, timeout)
@@ -306,7 +322,7 @@ class ServiceEnumerator(AutomotiveTestCase):
                         "Finished execution count of enumerator")
                     return
 
-            if (start_time + execution_time) < time.time():
+            if (start_time + execution_time) < time.monotonic():
                 log_automotive.debug(
                     "[i] Finished execution time of enumerator: %s",
                     time.ctime())
@@ -523,7 +539,7 @@ class ServiceEnumerator(AutomotiveTestCase):
              len(self.results_without_response)) + "\n"
 
         s += "Statistics per state\n"
-        s += make_lined_table(stats, lambda x: x, dump=True, sortx=str,
+        s += make_lined_table(stats, lambda *x: x, dump=True, sortx=str,
                               sorty=str) or ""
 
         return s + "\n"
@@ -646,8 +662,9 @@ class ServiceEnumerator(AutomotiveTestCase):
     def _show_results_information(self, **kwargs):
         # type: (Any) -> str
         def _get_table_entry(
-                tup  # type: _AutomotiveTestCaseScanResult
+            *args: Any
         ):  # type: (...) -> Tuple[str, str, str]
+            tup = cast(_AutomotiveTestCaseScanResult, args)
             return self._get_table_entry_x(tup), \
                 self._get_table_entry_y(tup), \
                 self._get_table_entry_z(tup)
@@ -689,8 +706,8 @@ class ServiceEnumerator(AutomotiveTestCase):
         elif orb(bytes(response)[0]) == 0x7f:
             return self._get_negative_response_label(response)
         else:
-            if isinstance(positive_case, six.string_types):
-                return cast(str, positive_case)
+            if isinstance(positive_case, str):
+                return positive_case
             elif callable(positive_case):
                 return positive_case(response)
             else:
@@ -710,8 +727,11 @@ class ServiceEnumerator(AutomotiveTestCase):
         return supported_resps
 
 
-@six.add_metaclass(abc.ABCMeta)
-class StateGeneratingServiceEnumerator(ServiceEnumerator, StateGenerator):
+class StateGeneratingServiceEnumerator(
+    ServiceEnumerator,
+    StateGenerator,
+    metaclass=abc.ABCMeta
+):
     def __init__(self):
         # type: () -> None
         super(StateGeneratingServiceEnumerator, self).__init__()

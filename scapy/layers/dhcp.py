@@ -12,8 +12,6 @@ Implements:
 - rfc1533 - DHCP Options and BOOTP Vendor Extensions
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
 try:
     from collections.abc import Iterable
 except ImportError:
@@ -59,7 +57,6 @@ from scapy.volatile import (
 from scapy.arch import get_if_raw_hwaddr
 from scapy.sendrecv import srp1, sendp
 from scapy.error import warning
-import scapy.libs.six as six
 from scapy.config import conf
 
 dhcpmagic = b"c\x82Sc"
@@ -190,15 +187,7 @@ class ClasslessStaticRoutesField(Field):
         return struct.pack('b', prefix) + dest + router
 
     def getfield(self, pkt, s):
-        if not s:
-            return None
-
         prefix = orb(s[0])
-        # if prefix is invalid value ( 0 > prefix > 32 ) then break
-        if prefix > 32 or prefix < 0:
-            warning("Invalid prefix value: %d (0x%x)", prefix, prefix)
-            return s, []
-
         route_len = 5 + (prefix + 7) // 8
         return s[route_len:], self.m2i(pkt, s[:route_len])
 
@@ -362,7 +351,7 @@ DHCPOptions = {
 
 DHCPRevOptions = {}
 
-for k, v in six.iteritems(DHCPOptions):
+for k, v in DHCPOptions.items():
     if isinstance(v, str):
         n = v
         v = None
@@ -382,7 +371,7 @@ class RandDHCPOptions(RandField):
         if rndstr is None:
             rndstr = RandBin(RandNum(0, 255))
         self.rndstr = rndstr
-        self._opts = list(six.itervalues(DHCPOptions))
+        self._opts = list(DHCPOptions.values())
         self._opts.remove("pad")
         self._opts.remove("end")
 
@@ -451,6 +440,16 @@ class DHCPOptionsField(StrField):
                 else:
                     olen = orb(x[1])
                     lval = [f.name]
+
+                    if olen == 0:
+                        try:
+                            _, val = f.getfield(pkt, b'')
+                        except Exception:
+                            opt.append(x)
+                            break
+                        else:
+                            lval.append(val)
+
                     try:
                         left = x[2:olen + 2]
                         while left:
@@ -612,7 +611,7 @@ class BOOTP_am(AnsweringMachine):
         self.broadcast = ltoa(atol(self.network) | (0xffffffff & ~msk))
         self.gw = gw
         self.nameserver = nameserver or gw
-        if isinstance(pool, six.string_types):
+        if isinstance(pool, str):
             pool = Net(pool)
         if isinstance(pool, Iterable):
             pool = [k for k in pool if k not in [gw, self.network, self.broadcast]]

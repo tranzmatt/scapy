@@ -13,13 +13,11 @@ We also provide TLS identifiers for these DH groups and also the ECDH groups.
 (Note that the equivalent of _ffdh_groups for ECDH is ec._CURVE_TYPES.)
 """
 
-from __future__ import absolute_import
 
 from scapy.config import conf
 from scapy.compat import bytes_int, int_bytes
 from scapy.error import warning
 from scapy.utils import long_converter
-import scapy.libs.six as six
 if conf.crypto_valid:
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives.asymmetric import dh, ec
@@ -42,11 +40,11 @@ if conf.crypto_valid:
 
         def DHParameterNumbers__init__hack(self, p, g, q=None):
             if (
-                not isinstance(p, six.integer_types) or
-                not isinstance(g, six.integer_types)
+                not isinstance(p, int) or
+                not isinstance(g, int)
             ):
                 raise TypeError("p and g must be integers")
-            if q is not None and not isinstance(q, six.integer_types):
+            if q is not None and not isinstance(q, int):
                 raise TypeError("q must be integer or None")
 
             self._p = p
@@ -72,7 +70,7 @@ class _FFDHParamsMetaclass(type):
         return the_class
 
 
-class _FFDHParams(six.with_metaclass(_FFDHParamsMetaclass)):
+class _FFDHParams(metaclass=_FFDHParamsMetaclass):
     pass
 
 
@@ -479,7 +477,7 @@ def _tls_named_groups_pubbytes(privkey):
     if isinstance(privkey, dh.DHPrivateKey):
         # https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.8.1
         pubkey = privkey.public_key()
-        return int_bytes(pubkey.public_numbers().y, privkey.key_size)
+        return int_bytes(pubkey.public_numbers().y, privkey.key_size // 8)
     elif isinstance(privkey, (x25519.X25519PrivateKey,
                               x448.X448PrivateKey)):
         # https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.8.2

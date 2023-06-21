@@ -13,11 +13,9 @@ import copy
 
 from collections import defaultdict
 
-from scapy.compat import Optional, List, Type, Any, Tuple, Iterable, Dict, \
-    cast, Callable, orb
+from scapy.compat import orb
 from scapy.contrib.automotive import log_automotive
 from scapy.packet import Packet
-import scapy.libs.six as six
 from scapy.config import conf
 from scapy.supersocket import SuperSocket
 from scapy.error import Scapy_Exception
@@ -43,6 +41,18 @@ from scapy.contrib.automotive.scanner.executor import \
 # TODO: Refactor this import
 from scapy.contrib.automotive.gm.gmlan_ecu_states import *  # noqa: F401, F403
 
+# Typing imports
+from typing import (
+    Optional,
+    List,
+    Type,
+    Any,
+    Tuple,
+    Iterable,
+    Dict,
+    cast,
+    Callable,
+)
 
 __all__ = ["GMLAN_Scanner", "GMLAN_ServiceEnumerator", "GMLAN_RDBIEnumerator",
            "GMLAN_RDBPIEnumerator", "GMLAN_RMBAEnumerator",
@@ -52,8 +62,7 @@ __all__ = ["GMLAN_Scanner", "GMLAN_ServiceEnumerator", "GMLAN_RDBIEnumerator",
            "GMLAN_DCEnumerator"]
 
 
-@six.add_metaclass(abc.ABCMeta)
-class GMLAN_Enumerator(ServiceEnumerator):
+class GMLAN_Enumerator(ServiceEnumerator, metaclass=abc.ABCMeta):
     """
     Abstract base class for GMLAN service enumerators. This class
     implements GMLAN specific functions.

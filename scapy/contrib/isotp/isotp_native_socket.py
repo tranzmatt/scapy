@@ -11,10 +11,8 @@ from ctypes.util import find_library
 import struct
 import socket
 
-from scapy.compat import Optional, Union, Tuple, Type, cast
 from scapy.contrib.isotp import log_isotp
 from scapy.packet import Packet
-import scapy.libs.six as six
 from scapy.error import Scapy_Exception
 from scapy.supersocket import SuperSocket
 from scapy.data import SO_TIMESTAMPNS
@@ -22,6 +20,15 @@ from scapy.config import conf
 from scapy.arch.linux import get_last_packet_timestamp, SIOCGIFINDEX
 from scapy.contrib.isotp.isotp_packet import ISOTP
 from scapy.layers.can import CAN_MTU, CAN_FD_MTU, CAN_MAX_DLEN, CAN_FD_MAX_DLEN
+
+# Typing imports
+from typing import (
+    Optional,
+    Union,
+    Tuple,
+    Type,
+    cast,
+)
 
 LIBC = ctypes.cdll.LoadLibrary(find_library("c"))  # type: ignore
 
@@ -297,7 +304,7 @@ class ISOTPNativeSocket(SuperSocket):
                  ):
         # type: (...) -> None
 
-        if not isinstance(iface, six.string_types):
+        if not isinstance(iface, str):
             # This is for interoperability with ISOTPSoftSockets.
             # If a NativeCANSocket is provided, the interface name of this
             # socket is extracted and an ISOTPNativeSocket will be opened

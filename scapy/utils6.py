@@ -8,7 +8,6 @@
 """
 Utility functions for IPv6.
 """
-from __future__ import absolute_import
 import socket
 import struct
 import time
@@ -25,7 +24,7 @@ from scapy.volatile import RandMAC, RandBin
 from scapy.error import warning, Scapy_Exception
 from functools import reduce, cmp_to_key
 
-from scapy.compat import (
+from typing import (
     Iterator,
     List,
     Optional,

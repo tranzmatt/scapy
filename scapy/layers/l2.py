@@ -7,11 +7,10 @@
 Classes and functions for layer 2 protocols.
 """
 
-from __future__ import absolute_import
-from __future__ import print_function
+import itertools
+import socket
 import struct
 import time
-import socket
 
 from scapy.ansmachine import AnsweringMachine
 from scapy.arch import get_if_addr, get_if_hwaddr
@@ -52,7 +51,6 @@ from scapy.fields import (
     XShortField,
 )
 from scapy.interfaces import _GlobInterfaceType
-from scapy.libs.six import viewitems
 from scapy.packet import bind_layers, Packet
 from scapy.plist import (
     PacketList,
@@ -63,10 +61,13 @@ from scapy.plist import (
 from scapy.sendrecv import sendp, srp, srp1, srploop
 from scapy.utils import checksum, hexdump, hexstr, inet_ntoa, inet_aton, \
     mac2str, valid_mac, valid_net, valid_net6
-from scapy.compat import (
+
+# Typing imports
+from typing import (
     Any,
     Callable,
     Dict,
+    Iterable,
     List,
     Optional,
     Tuple,
@@ -75,6 +76,8 @@ from scapy.compat import (
     cast,
 )
 from scapy.interfaces import NetworkInterface
+
+
 if conf.route is None:
     # unused import, only to initialize conf.route
     import scapy.route  # noqa: F401
@@ -98,7 +101,7 @@ class Neighbor:
         self.resolvers[l2, l3] = resolve_method
 
     def resolve(self, l2inst, l3inst):
-        # type: (Ether, Packet) -> Optional[str]
+        # type: (Packet, Packet) -> Optional[str]
         k = l2inst.__class__, l3inst.__class__
         if k in self.resolvers:
             return self.resolvers[k](l2inst, l3inst)
@@ -161,7 +164,7 @@ class DestMACField(MACField):
         MACField.__init__(self, name, None)
 
     def i2h(self, pkt, x):
-        # type: (Optional[Ether], Optional[str]) -> str
+        # type: (Optional[Packet], Optional[str]) -> str
         if x is None and pkt is not None:
             try:
                 x = conf.neighbor.resolve(pkt, pkt.payload)
@@ -176,8 +179,8 @@ class DestMACField(MACField):
         return super(DestMACField, self).i2h(pkt, x)
 
     def i2m(self, pkt, x):
-        # type: (Optional[Ether], Optional[str]) -> bytes
-        return MACField.i2m(self, pkt, self.i2h(pkt, x))
+        # type: (Optional[Packet], Optional[str]) -> bytes
+        return super(DestMACField, self).i2m(pkt, self.i2h(pkt, x))
 
 
 class SourceMACField(MACField):
@@ -204,8 +207,8 @@ class SourceMACField(MACField):
         return super(SourceMACField, self).i2h(pkt, x)
 
     def i2m(self, pkt, x):
-        # type: (Optional[Ether], Optional[Any]) -> bytes
-        return MACField.i2m(self, pkt, self.i2h(pkt, x))
+        # type: (Optional[Packet], Optional[Any]) -> bytes
+        return super(SourceMACField, self).i2m(pkt, self.i2h(pkt, x))
 
 
 # Layers
@@ -281,7 +284,7 @@ class Dot3(Packet):
         return s[:tmp_len], s[tmp_len:]
 
     def answers(self, other):
-        # type: (Ether) -> int
+        # type: (Packet) -> int
         if isinstance(other, Dot3):
             return self.payload.answers(other.payload)
         return 0
@@ -368,9 +371,12 @@ class Dot1Q(Packet):
     name = "802.1Q"
     aliastypes = [Ether]
     fields_desc = [BitField("prio", 0, 3),
-                   BitField("id", 0, 1),
+                   BitField("dei", 0, 1),
                    BitField("vlan", 1, 12),
                    XShortEnumField("type", 0x0000, ETHER_TYPES)]
+    deprecated_fields = {
+        "id": ("dei", "2.5.0"),
+    }
 
     def answers(self, other):
         # type: (Packet) -> int
@@ -733,17 +739,20 @@ conf.l3types.register(ETH_P_ARP, ARP)
 def arpcachepoison(
     target,  # type: Union[str, List[str]]
     addresses,  # type: Union[str, Tuple[str, str], List[Tuple[str, str]]]
+    broadcast=False,  # type: bool
     interval=15,  # type: int
 ):
     # type: (...) -> None
     """Poison targets' ARP cache
 
     :param target: Can be an IP, subnet (string) or a list of IPs. This lists the IPs
-                   or subnets that will be poisoned.
+                   or the subnet that will be poisoned.
     :param addresses: Can be either a string, a tuple of a list of tuples.
-                      If it's a string, it's the IP to usurpate in the victim,
+                      If it's a string, it's the IP to advertise to the victim,
                       with the local interface's MAC. If it's a tuple,
-                      it's ("IP", "MAC"). It it's a list, it's [("IP", "MAC")]
+                      it's ("IP", "MAC"). It it's a list, it's [("IP", "MAC")].
+                      "IP" can be a subnet of course.
+    :param broadcast: Use broadcast ethernet
 
     Examples for target "192.168.0.2"::
 
@@ -767,9 +776,10 @@ def arpcachepoison(
         couple_list = [addresses]
     else:
         couple_list = addresses
-    p = [
-        Ether(src=y) / ARP(op="who-has", psrc=x, pdst=targets,
-                           hwsrc=y, hwdst="ff:ff:ff:ff:ff:ff")
+    p: List[Packet] = [
+        Ether(src=y, dst="ff:ff:ff:ff:ff:ff" if broadcast else None) /
+        ARP(op="who-has", psrc=x, pdst=targets,
+            hwsrc=y, hwdst="00:00:00:00:00:00")
         for x, y in couple_list
     ]
     try:
@@ -784,19 +794,21 @@ def arpcachepoison(
 def arp_mitm(
     ip1,  # type: str
     ip2,  # type: str
-    mac1=None,  # type: Optional[str]
-    mac2=None,  # type: Optional[str]
+    mac1=None,  # type: Optional[Union[str, List[str]]]
+    mac2=None,  # type: Optional[Union[str, List[str]]]
+    broadcast=False,  # type: bool
     target_mac=None,  # type: Optional[str]
     iface=None,  # type: Optional[_GlobInterfaceType]
     inter=3,  # type: int
 ):
     # type: (...) -> None
-    """ARP MitM: poison 2 target's ARP cache
+    r"""ARP MitM: poison 2 target's ARP cache
 
     :param ip1: IPv4 of the first machine
     :param ip2: IPv4 of the second machine
     :param mac1: MAC of the first machine (optional: will ARP otherwise)
     :param mac2: MAC of the second machine (optional: will ARP otherwise)
+    :param broadcast: if True, will use broadcast mac for MitM by default
     :param target_mac: MAC of the attacker (optional: default to the interface's one)
     :param iface: the network interface. (optional: default, route for ip1)
 
@@ -807,33 +819,65 @@ def arp_mitm(
         $ sudo scapy
         >>> arp_mitm("192.168.122.156", "192.168.122.17")
 
+    Alternative usages:
+        >>> arp_mitm("10.0.0.1", "10.1.1.0/21", iface="eth1")
+        >>> arp_mitm("10.0.0.1", "10.1.1.2",
+        ...          target_mac="aa:aa:aa:aa:aa:aa",
+        ...          mac2="00:1e:eb:bf:c1:ab")
+
+    .. warning::
+        If using a subnet, this will first perform an arping, unless broadcast is on!
+
     Remember to change the sysctl settings back..
     """
     if not iface:
         iface = conf.route.route(ip1)[0]
     if not target_mac:
         target_mac = get_if_hwaddr(iface)
-    if mac1 is None:
-        mac1 = getmacbyip(ip1)
-        if not mac1:
-            print("Can't resolve mac for %s" % ip1)
-            return
-    if mac2 is None:
-        mac2 = getmacbyip(ip2)
-        if not mac2:
-            print("Can't resolve mac for %s" % ip2)
-            return
-    print("MITM on %s: %s <--> %s <--> %s" % (iface, mac1, target_mac, mac2))
+
+    def _tups(ip, mac):
+        # type: (str, Optional[Union[str, List[str]]]) -> Iterable[Tuple[str, str]]
+        if mac is None:
+            if broadcast:
+                # ip can be a Net/list/etc and will be iterated upon while sending
+                return [(ip, "ff:ff:ff:ff:ff:ff")]
+            return [(x.query.pdst, x.answer.hwsrc)
+                    for x in arping(ip, verbose=0)[0]]
+        elif isinstance(mac, list):
+            return [(ip, x) for x in mac]
+        else:
+            return [(ip, mac)]
+
+    tup1 = _tups(ip1, mac1)
+    if not tup1:
+        raise OSError(f"Could not resolve {ip1}")
+    tup2 = _tups(ip2, mac2)
+    if not tup2:
+        raise OSError(f"Could not resolve {ip2}")
+    print(f"MITM on {iface}: %s <--> {target_mac} <--> %s" % (
+        [x[1] for x in tup1],
+        [x[1] for x in tup2],
+    ))
     # We loop who-has requests
     srploop(
-        [
-            Ether(dst=mac1, src=target_mac) /
-            ARP(op="who-has", psrc=ip2, pdst=ip1,
-                hwsrc=target_mac, hwdst="ff:ff:ff:ff:ff:ff"),
-            Ether(dst=mac2, src=target_mac) /
-            ARP(op="who-has", psrc=ip1, pdst=ip2,
-                hwsrc=target_mac, hwdst="ff:ff:ff:ff:ff:ff")
-        ],
+        list(itertools.chain(
+            (x
+             for ipa, maca in tup1
+             for ipb, _ in tup2
+             for x in
+             Ether(dst=maca, src=target_mac) /
+             ARP(op="who-has", psrc=ipb, pdst=ipa,
+                 hwsrc=target_mac, hwdst="00:00:00:00:00:00")
+             ),
+            (x
+             for ipb, macb in tup2
+             for ipa, _ in tup1
+             for x in
+             Ether(dst=macb, src=target_mac) /
+             ARP(op="who-has", psrc=ipa, pdst=ipb,
+                 hwsrc=target_mac, hwdst="00:00:00:00:00:00")
+             ),
+        )),
         filter="arp and arp[7] = 2",
         inter=inter,
         iface=iface,
@@ -842,14 +886,27 @@ def arp_mitm(
         store=0,
     )
     print("Restoring...")
-    sendp([
-        Ether(dst=mac1, src=target_mac) /
-        ARP(op="who-has", psrc=ip2, pdst=ip1,
-            hwsrc=mac2, hwdst="ff:ff:ff:ff:ff:ff"),
-        Ether(dst=mac2, src=target_mac) /
-        ARP(op="who-has", psrc=ip1, pdst=ip2,
-            hwsrc=mac1, hwdst="ff:ff:ff:ff:ff:ff")
-    ], iface=iface)
+    sendp(
+        list(itertools.chain(
+            (x
+             for ipa, maca in tup1
+             for ipb, macb in tup2
+             for x in
+             Ether(dst=maca, src=macb) /
+             ARP(op="who-has", psrc=ipb, pdst=ipa,
+                 hwsrc=macb, hwdst="00:00:00:00:00:00")
+             ),
+            (x
+             for ipb, macb in tup2
+             for ipa, maca in tup1
+             for x in
+             Ether(dst=macb, src=maca) /
+             ARP(op="who-has", psrc=ipa, pdst=ipb,
+                 hwsrc=maca, hwdst="00:00:00:00:00:00")
+             ),
+        )),
+        iface=iface
+    )
 
 
 class ARPingResult(SndRcvList):
@@ -972,7 +1029,7 @@ class ARP_am(AnsweringMachine[Packet]):
         self.ARP_addr = ARP_addr
 
     def is_request(self, req):
-        # type: (Ether) -> bool
+        # type: (Packet) -> bool
         if not req.haslayer(ARP):
             return False
         arp = req[ARP]
@@ -1037,7 +1094,7 @@ https://ftp.netbsd.org/pub/NetBSD/security/advisories/NetBSD-SA2017-002.txt.asc
 
     """
     # We want explicit packets
-    pkts_iface = {}  # type: Dict[str, List[Ether]]
+    pkts_iface = {}  # type: Dict[str, List[Packet]]
     for pkt in ARP(pdst=target):
         # We have to do some of Scapy's work since we mess with
         # important values
@@ -1059,7 +1116,7 @@ https://ftp.netbsd.org/pub/NetBSD/security/advisories/NetBSD-SA2017-002.txt.asc
             Ether(src=hwsrc, dst=ETHER_BROADCAST) / pkt
         )
     ans, unans = SndRcvList(), PacketList(name="Unanswered")
-    for iface, pkts in viewitems(pkts_iface):
+    for iface, pkts in pkts_iface.items():
         ans_new, unans_new = srp(pkts, iface=iface, filter="arp", **kargs)
         ans += ans_new
         unans += unans_new
