@@ -1547,12 +1547,12 @@ class RawPcapNgReader(RawPcapReader):
                 comment = options[4:4 + length]
                 newline_index = comment.find(b"\n")
                 if newline_index == -1:
-                    opts["comment"] = comment + b"\n"
-                else:
-                    opts["comment"] = comment[:newline_index]
-            if code in opt_custom_codes and length >= 1 and 4 + length < len(options):
+                    warning("PcapNg: invalid comment option")
+                    break
+                opts["comment"] = comment[:newline_index]
+            if (code == 2988 or code ==2989 or code == 19372 or code == 19373) and length >= 1 and 4 + length < len(options):
                 custom_payload = options[4:4 + length]
-                custom_field = {"code": code, "length": len(custom_payload), "payload": custom_payload}
+                custom_field = { 'code' : code, 'length': len(custom_payload), 'payload' : custom_payload }
                 opts["custom"].append(custom_field)
                 break
             if code == 0:
@@ -1621,6 +1621,7 @@ class RawPcapNgReader(RawPcapReader):
                                                wirelen=wirelen,
                                                comment=comment,
                                                custom=custom))
+
 
     def _read_block_spb(self, block, size):
         # type: (bytes, int) -> Tuple[bytes, RawPcapNgReader.PacketMetadata]
@@ -1752,6 +1753,7 @@ class PcapNgReader(RawPcapNgReader, PcapReader, _SuperSocket):
                 # conf.raw_layer is set on import
                 import scapy.packet  # noqa: F401
             p = conf.raw_layer(s)
+
         if tshigh is not None:
             p.time = EDecimal((tshigh << 32) + tslow) / tsresol
         p.wirelen = wirelen
