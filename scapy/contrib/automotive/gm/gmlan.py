@@ -10,10 +10,25 @@
 import struct
 
 from scapy.contrib.automotive import log_automotive
-from scapy.fields import ObservableDict, XByteEnumField, ByteEnumField, \
-    ConditionalField, XByteField, StrField, XShortEnumField, XShortField, \
-    X3BytesField, XIntField, ShortField, PacketField, PacketListField, \
-    FieldListField, MultipleTypeField, StrFixedLenField
+from scapy.fields import (
+    ByteEnumField,
+    ConditionalField,
+    FieldListField,
+    MayEnd,
+    MultipleTypeField,
+    ObservableDict,
+    PacketField,
+    PacketListField,
+    ShortField,
+    StrField,
+    StrFixedLenField,
+    X3BytesField,
+    XByteEnumField,
+    XByteField,
+    XIntField,
+    XShortEnumField,
+    XShortField,
+)
 from scapy.packet import Packet, bind_layers, NoPayload
 from scapy.config import conf
 from scapy.contrib.isotp import ISOTP
@@ -26,11 +41,11 @@ try:
     if conf.contribs['GMLAN']['treat-response-pending-as-answer']:
         pass
 except KeyError:
-    log_automotive.info("Specify \"conf.contribs['GMLAN'] = "
-                        "{'treat-response-pending-as-answer': True}\" to treat "
-                        "a negative response 'RequestCorrectlyReceived-"
-                        "ResponsePending' as answer of a request. \n"
-                        "The default value is False.")
+    # log_automotive.info("Specify \"conf.contribs['GMLAN'] = "
+    #                    "{'treat-response-pending-as-answer': True}\" to treat "
+    #                    "a negative response 'RequestCorrectlyReceived-"
+    #                    "ResponsePending' as answer of a request. \n"
+    #                    "The default value is False.")
     conf.contribs['GMLAN'] = {'treat-response-pending-as-answer': False}
 
 conf.contribs['GMLAN']['GMLAN_ECU_AddressingScheme'] = None
@@ -725,7 +740,8 @@ class GMLAN_NR(Packet):
     name = 'NegativeResponse'
     fields_desc = [
         XByteEnumField('requestServiceId', 0, GMLAN.services),
-        ByteEnumField('returnCode', 0, negativeResponseCodes),
+        MayEnd(ByteEnumField('returnCode', 0, negativeResponseCodes)),
+        # XXX Is this MayEnd correct? Why is the field below also 0xe3 ?
         ShortField('deviceControlLimitExceeded', 0)
     ]
 

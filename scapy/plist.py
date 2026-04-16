@@ -10,7 +10,7 @@ PacketList: holds several packets and allows to do operations on them.
 
 import os
 from collections import defaultdict
-from typing import NamedTuple
+from typing import Sequence, NamedTuple
 
 from scapy.config import conf
 from scapy.base_classes import (
@@ -379,7 +379,7 @@ class _PacketList(Generic[_Inner], metaclass=PacketList_metaclass):
             kargs = MATPLOTLIB_DEFAULT_PLOT_KARGS
 
         if plot_xy:
-            lines = [plt.plot(*list(zip(*pl)), **dict(kargs, label=k))  # type: ignore
+            lines = [plt.plot(*list(zip(*pl)), **dict(kargs, label=k))
                      for k, pl in d.items()]
         else:
             lines = [plt.plot(pl, **dict(kargs, label=k))
@@ -780,7 +780,7 @@ class PacketList(_PacketList[Packet],
 
 
 _PacketIterable = Union[
-    List[Packet],
+    Sequence[Packet],
     Packet,
     SetGen[Packet],
     _PacketList[Packet]

@@ -2,6 +2,8 @@
   "testfiles": [
     "test/*.uts",
     "test/scapy/layers/*.uts",
+    "test/scapy/layers/tls/*.uts",
+    "test/scapy/layers/msrpce/*.uts",
     "test/contrib/*.uts",
     "test/tools/*.uts",
     "test/contrib/automotive/*.uts",
@@ -10,8 +12,7 @@
     "test/contrib/automotive/gm/*.uts",
     "test/contrib/automotive/bmw/*.uts",
     "test/contrib/automotive/xcp/*.uts",
-    "test/contrib/automotive/autosar/*.uts",
-    "test/tls/tests_tls_netaccess.uts"
+    "test/contrib/automotive/autosar/*.uts"
   ],
   "remove_testfiles": [
     "test/windows.uts",
@@ -19,11 +20,10 @@
   ],
   "breakfailed": true,
   "onlyfailed": true,
+  "extensions": ["scapy-rpc"],
   "preexec": {
     "test/contrib/*.uts": "load_contrib(\"%name%\")",
-    "test/cert.uts": "load_layer(\"tls\")",
-    "test/sslv2.uts": "load_layer(\"tls\")",
-    "test/tls*.uts": "load_layer(\"tls\")"
+    "test/scapy/layers/tls/*.uts": "load_layer(\"tls\")"
   },
   "kw_ko": [
     "osx",

@@ -6,19 +6,8 @@
 # scapy.contrib.description = ISO-TP (ISO 15765-2) Packet Definitions
 # scapy.contrib.status = library
 
-import struct
 import logging
-
-from scapy.config import conf
-from scapy.packet import Packet
-from scapy.fields import BitField, FlagsField, StrLenField, \
-    ThreeBytesField, XBitField, ConditionalField, \
-    BitEnumField, ByteField, XByteField, BitFieldLenField, StrField, \
-    FieldLenField, IntField, ShortField
-from scapy.compat import chb, orb
-from scapy.layers.can import CAN
-from scapy.error import Scapy_Exception
-
+import struct
 # Typing imports
 from typing import (
     Optional,
@@ -28,6 +17,16 @@ from typing import (
     Type,
     cast,
 )
+
+from scapy.compat import chb, orb
+from scapy.config import conf
+from scapy.error import Scapy_Exception
+from scapy.fields import BitField, FlagsField, StrLenField, \
+    ThreeBytesField, XBitField, ConditionalField, \
+    BitEnumField, ByteField, XByteField, BitFieldLenField, StrField, \
+    FieldLenField, IntField, ShortField
+from scapy.layers.can import CAN, CAN_FD_MAX_DLEN as CAN_FD_MAX_DLEN, CANFD
+from scapy.packet import Packet
 
 log_isotp = logging.getLogger("scapy.contrib.isotp")
 
@@ -96,11 +95,22 @@ class ISOTP(Packet):
         """Helper function to fragment an ISOTP message into multiple
         CAN frames.
 
+        :param fd: type: Optional[bool]: will fragment the can frames
+            with size CAN_FD_MAX_DLEN
+
         :return: A list of CAN frames
         """
-        data_bytes_in_frame = 7
+
+        fd = kargs.pop("fd", False)
+        pkt_cls = CANFD if fd else CAN
+
+        def _get_data_len():
+            # type: () -> int
+            return CAN_MAX_DLEN if not fd else CAN_FD_MAX_DLEN
+
+        data_bytes_in_frame = _get_data_len() - 1
         if self.rx_ext_address is not None:
-            data_bytes_in_frame = 6
+            data_bytes_in_frame = data_bytes_in_frame - 1
 
         if len(self.data) > ISOTP_MAX_DLEN_2015:
             raise Scapy_Exception("Too much data in ISOTP message")
@@ -112,10 +122,10 @@ class ISOTP(Packet):
                 frame_data = struct.pack('B', self.rx_ext_address) + frame_data
 
             if self.rx_id is None or self.rx_id <= 0x7ff:
-                pkt = CAN(identifier=self.rx_id, data=frame_data)
+                pkt = pkt_cls(identifier=self.rx_id, data=frame_data)
             else:
-                pkt = CAN(identifier=self.rx_id, flags="extended",
-                          data=frame_data)
+                pkt = pkt_cls(identifier=self.rx_id, flags="extended",
+                              data=frame_data)
             return [pkt]
 
         # Construct the first frame
@@ -125,13 +135,13 @@ class ISOTP(Packet):
             frame_header = struct.pack(">HI", 0x1000, len(self.data))
         if self.rx_ext_address:
             frame_header = struct.pack('B', self.rx_ext_address) + frame_header
-        idx = 8 - len(frame_header)
+        idx = _get_data_len() - len(frame_header)
         frame_data = self.data[0:idx]
         if self.rx_id is None or self.rx_id <= 0x7ff:
-            frame = CAN(identifier=self.rx_id, data=frame_header + frame_data)
+            frame = pkt_cls(identifier=self.rx_id, data=frame_header + frame_data)
         else:
-            frame = CAN(identifier=self.rx_id, flags="extended",
-                        data=frame_header + frame_data)
+            frame = pkt_cls(identifier=self.rx_id, flags="extended",
+                            data=frame_header + frame_data)
 
         # Construct consecutive frames
         n = 1
@@ -146,10 +156,10 @@ class ISOTP(Packet):
             if self.rx_ext_address:
                 frame_header = struct.pack('B', self.rx_ext_address) + frame_header  # noqa: E501
             if self.rx_id is None or self.rx_id <= 0x7ff:
-                pkt = CAN(identifier=self.rx_id, data=frame_header + frame_data)  # noqa: E501
+                pkt = pkt_cls(identifier=self.rx_id, data=frame_header + frame_data)  # noqa: E501
             else:
-                pkt = CAN(identifier=self.rx_id, flags="extended",
-                          data=frame_header + frame_data)
+                pkt = pkt_cls(identifier=self.rx_id, flags="extended",
+                              data=frame_header + frame_data)
             pkts.append(pkt)
         return cast(List[Packet], pkts)
 

@@ -14,6 +14,8 @@ Provides:
 """
 
 from collections import defaultdict
+
+import json
 import re
 import time
 import itertools
@@ -30,8 +32,10 @@ from scapy.fields import (
     Field,
     FlagsField,
     FlagValue,
+    MayEnd,
     MultiEnumField,
     MultipleTypeField,
+    PadField,
     PacketListField,
     RawVal,
     StrField,
@@ -90,6 +94,7 @@ class Packet(
         "packetfields",
         "original", "explicit", "raw_packet_cache",
         "raw_packet_cache_fields", "_pkt", "post_transforms",
+        "stop_dissection_after",
         # then payload, underlayer and parent
         "payload", "underlayer", "parent",
         "name",
@@ -99,14 +104,19 @@ class Packet(
         "direction", "sniffed_on",
         # handle snaplen Vs real length
         "wirelen",
+<<<<<<< HEAD
         "comment",
         "custom"
+=======
+        "comments",
+        "process_information"
+>>>>>>> upstream/master
     ]
 
     opt_custom_codes = [OPT_CUSTOM_STR_SAFE, OPT_CUSTOM_BYTES_SAFE, OPT_CUSTOM_STR_UNSAFE, OPT_CUSTOM_BYTES_UNSAFE]
 
     name = None
-    fields_desc = []  # type: Sequence[AnyField]
+    fields_desc = []  # type: List[AnyField]
     deprecated_fields = {}  # type: Dict[str, Tuple[str, str]]
     overload_fields = {}  # type: Dict[Type[Packet], Dict[str, Any]]
     payload_guess = []  # type: List[Tuple[Dict[str, Any], Type[Packet]]]
@@ -152,6 +162,7 @@ class Packet(
                  _internal=0,  # type: int
                  _underlayer=None,  # type: Optional[Packet]
                  _parent=None,  # type: Optional[Packet]
+                 stop_dissection_after=None,  # type: Optional[Type[Packet]]
                  **fields  # type: Any
                  ):
         # type: (...) -> None
@@ -167,7 +178,7 @@ class Packet(
         self.fieldtype = {}  # type: Dict[str, AnyField]
         self.packetfields = []  # type: List[AnyField]
         self.payload = NoPayload()  # type: Packet
-        self.init_fields()
+        self.init_fields(bool(_pkt))
         self.underlayer = _underlayer
         self.parent = _parent
         if isinstance(_pkt, bytearray):
@@ -179,8 +190,14 @@ class Packet(
         self.wirelen = None  # type: Optional[int]
         self.direction = None  # type: Optional[int]
         self.sniffed_on = None  # type: Optional[_GlobInterfaceType]
+<<<<<<< HEAD
         self.comment = None  # type: Optional[bytes]
         self.custom = None  # type: Optional[bytes]
+=======
+        self.comments = None  # type: Optional[List[bytes]]
+        self.process_information = None  # type: Optional[Dict[str, Any]]
+        self.stop_dissection_after = stop_dissection_after
+>>>>>>> upstream/master
         if _pkt:
             self.dissect(_pkt)
             if not _internal:
@@ -213,16 +230,54 @@ class Packet(
         else:
             self.post_transforms = [post_transform]
 
-    _PickleType = Tuple[
-        Union[EDecimal, float],
-        Optional[Union[EDecimal, float, None]],
-        Optional[int],
-        Optional[_GlobInterfaceType],
-        Optional[int],
-        Optional[bytes],
-    ]
+    @property
+    def comment(self):
+        # type: () -> Optional[bytes]
+        """Get the comment of the packet"""
+        if self.comments and len(self.comments):
+            return self.comments[0]
+        return None
+
+    @comment.setter
+    def comment(self, value):
+        # type: (Optional[bytes]) -> None
+        """
+        Set the comment of the packet.
+        If value is None, it will clear the comments.
+        """
+        if value is not None:
+            self.comments = [value]
+        else:
+            self.comments = None
+
+    @classmethod
+    def _rebuild_pkt(
+        cls,  # type: Type[Packet]
+        fields,  # type: Dict[str, Any]
+        payload,  # type: Optional[Packet]
+        metadata,  # type: Dict[str, Any]
+        extra_slots={},  # type: Dict[str, Any]
+    ):
+        # type: (...) -> Packet
+        """Helper for unpickling Packet instances via field values."""
+        # Create the instance using the field values
+        pkt = cls(**fields)
+        if payload is not None:
+            pkt.add_payload(payload)
+        # Restore metadata
+        pkt.time = metadata['time']
+        pkt.sent_time = metadata['sent_time']
+        pkt.direction = metadata['direction']
+        pkt.sniffed_on = metadata['sniffed_on']
+        pkt.wirelen = metadata['wirelen']
+        pkt.comments = metadata['comments']
+        # Restore any extra __slots__ defined by subclasses
+        for attr, value in extra_slots.items():
+            setattr(pkt, attr, value)
+        return pkt
 
     def __reduce__(self):
+<<<<<<< HEAD
         # type: () -> Tuple[Type[Packet], Tuple[bytes], Packet._PickleType]
         """Used by pickling methods"""
         return (self.__class__, (self.build(),), (
@@ -246,6 +301,39 @@ class Packet(
         self.comment = state[5]
         self.custom = state[6]
         return self
+=======
+        # type: () -> Tuple[Any, ...]
+        """Used by pickling methods.
+
+        Reconstructs the packet from field values, payload, and metadata.
+        """
+        # Store field values for unpickling
+        fields = {}
+        for f in self.fields_desc:
+            if f.name in self.fields:
+                fields[f.name] = self.fields[f.name]
+        payload = self.payload  # type: Optional[Packet]
+        if isinstance(payload, NoPayload):
+            payload = None
+        # Store metadata for unpickling
+        metadata = {
+            'time': self.time,
+            'sent_time': self.sent_time,
+            'direction': self.direction,
+            'sniffed_on': self.sniffed_on,
+            'wirelen': self.wirelen,
+            'comments': self.comments,
+        }
+        # Collect any extra __slots__ defined by subclasses
+        extra_slots = {}
+        for attr in type(self).__all_slots__ - set(Packet.__slots__):
+            if hasattr(self, attr):
+                extra_slots[attr] = getattr(self, attr)
+        return (
+            type(self)._rebuild_pkt,
+            (fields, payload, metadata, extra_slots),
+        )
+>>>>>>> upstream/master
 
     def __deepcopy__(self,
                      memo,  # type: Any
@@ -254,8 +342,8 @@ class Packet(
         """Used by copy.deepcopy"""
         return self.copy()
 
-    def init_fields(self):
-        # type: () -> None
+    def init_fields(self, for_dissect_only=False):
+        # type: (bool) -> None
         """
         Initialize each fields of the fields_desc dict
         """
@@ -263,7 +351,7 @@ class Packet(
         if self.class_dont_cache.get(self.__class__, False):
             self.do_init_fields(self.fields_desc)
         else:
-            self.do_init_cached_fields()
+            self.do_init_cached_fields(for_dissect_only=for_dissect_only)
 
     def do_init_fields(self,
                        flist,  # type: Sequence[AnyField]
@@ -281,8 +369,8 @@ class Packet(
         # We set default_fields last to avoid race issues
         self.default_fields = default_fields
 
-    def do_init_cached_fields(self):
-        # type: () -> None
+    def do_init_cached_fields(self, for_dissect_only=False):
+        # type: (bool) -> None
         """
         Initialize each fields of the fields_desc dict, or use the cached
         fields information
@@ -300,6 +388,10 @@ class Packet(
             self.default_fields = default_fields
             self.fieldtype = Packet.class_fieldtype[cls_name]
             self.packetfields = Packet.class_packetfields[cls_name]
+
+            # Optimization: no need for references when only dissecting.
+            if for_dissect_only:
+                return
 
             # Deepcopy default references
             for fname in Packet.class_default_fields_ref[cls_name]:
@@ -335,8 +427,7 @@ class Packet(
                 self.do_init_fields(self.fields_desc)
                 return
 
-            tmp_copy = copy.deepcopy(f.default)
-            class_default_fields[f.name] = tmp_copy
+            class_default_fields[f.name] = copy.deepcopy(f.default)
             class_fieldtype[f.name] = f
             if f.holds_packets:
                 class_packetfields.append(f)
@@ -433,8 +524,14 @@ class Packet(
         clone.payload = self.payload.copy()
         clone.payload.add_underlayer(clone)
         clone.time = self.time
+<<<<<<< HEAD
         clone.comment = self.comment
         clone.custom = self.custom
+=======
+        clone.comments = self.comments
+        clone.direction = self.direction
+        clone.sniffed_on = self.sniffed_on
+>>>>>>> upstream/master
         return clone
 
     def _resolve_alias(self, attr):
@@ -665,10 +762,10 @@ class Packet(
             # avoid copying whole packets (perf: #GH3894)
             if fld.islist:
                 return [
-                    _cpy(x.fields) for x in val
+                    (_cpy(x.fields), x.payload.raw_packet_cache) for x in val
                 ]
             else:
-                return _cpy(val.fields)
+                return (_cpy(val.fields), val.payload.raw_packet_cache)
         elif fld.islist or fld.ismutable:
             return _cpy(val)
         return None
@@ -691,8 +788,6 @@ class Packet(
         # type: () -> bytes
         """
         Create the default layer regarding fields_desc dict
-
-        :param field_pos_list:
         """
         if self.raw_packet_cache is not None and \
                 self.raw_packet_cache_fields is not None:
@@ -716,7 +811,7 @@ class Packet(
                 except Exception as ex:
                     try:
                         ex.args = (
-                            "While dissecting field '%s': " % f.name +
+                            "While building field '%s': " % f.name +
                             ex.args[0],
                         ) + ex.args[1:]
                     except (AttributeError, IndexError):
@@ -1016,8 +1111,6 @@ class Packet(
         _raw = s
         self.raw_packet_cache_fields = {}
         for f in self.fields_desc:
-            if not s:
-                break
             s, fval = f.getfield(self, s)
             # Skip unused ConditionalField
             if isinstance(f, ConditionalField) and fval is None:
@@ -1028,6 +1121,11 @@ class Packet(
                 self.raw_packet_cache_fields[f.name] = \
                     self._raw_packet_cache_field_value(f, fval, copy=True)
             self.fields[f.name] = fval
+            # Nothing left to dissect
+            if not s and (isinstance(f, MayEnd) or
+                          (fval is not None and isinstance(f, ConditionalField) and
+                           isinstance(f.fld, MayEnd))):
+                break
         self.raw_packet_cache = _raw[:-len(s)] if s else _raw
         self.explicit = 1
         return s
@@ -1040,9 +1138,22 @@ class Packet(
         :param str s: the raw layer
         """
         if s:
+            if (
+                self.stop_dissection_after and
+                isinstance(self, self.stop_dissection_after)
+            ):
+                # stop dissection here
+                p = conf.raw_layer(s, _internal=1, _underlayer=self)
+                self.add_payload(p)
+                return
             cls = self.guess_payload_class(s)
             try:
-                p = cls(s, _internal=1, _underlayer=self)
+                p = cls(
+                    s,
+                    stop_dissection_after=self.stop_dissection_after,
+                    _internal=1,
+                    _underlayer=self,
+                )
             except KeyboardInterrupt:
                 raise
             except Exception:
@@ -1128,8 +1239,14 @@ class Packet(
             self.raw_packet_cache_fields
         )
         pkt.wirelen = self.wirelen
+<<<<<<< HEAD
         pkt.comment = self.comment
         pkt.custom = self.custom
+=======
+        pkt.comments = self.comments
+        pkt.sniffed_on = self.sniffed_on
+        pkt.direction = self.direction
+>>>>>>> upstream/master
         if payload is not None:
             pkt.add_payload(payload)
         return pkt
@@ -1259,7 +1376,7 @@ class Packet(
         if _subclass:
             match = issubtype
         else:
-            match = lambda cls1, cls2: bool(cls1 == cls2)
+            match = lambda x, t: bool(x == t)
         if cls is None or match(self.__class__, cls) \
            or cls in [self.__class__.__name__, self._name]:
             return True
@@ -1292,7 +1409,7 @@ values.
         if _subclass:
             match = issubtype
         else:
-            match = lambda cls1, cls2: bool(cls1 == cls2)
+            match = lambda x, t: bool(x == t)
         # Note:
         # cls can be int, packet, str
         # string_class_name can be packet, str (packet or packet+field)
@@ -1414,16 +1531,27 @@ values.
         """
 
         if dump:
-            from scapy.themes import AnsiColorTheme
-            ct = AnsiColorTheme()  # No color for dump output
+            from scapy.themes import ColorTheme, AnsiColorTheme
+            ct: ColorTheme = AnsiColorTheme()  # No color for dump output
         else:
             ct = conf.color_theme
-        s = "%s%s %s %s \n" % (label_lvl,
-                               ct.punct("###["),
-                               ct.layer_name(self.name),
-                               ct.punct("]###"))
-        for f in self.fields_desc:
+        s = "%s%s %s %s\n" % (label_lvl,
+                              ct.punct("###["),
+                              ct.layer_name(self.name),
+                              ct.punct("]###"))
+        fields = self.fields_desc.copy()
+        while fields:
+            f = fields.pop(0)
             if isinstance(f, ConditionalField) and not f._evalcond(self):
+                continue
+            if hasattr(f, "fields"):  # Field has subfields
+                s += "%s  %s =\n" % (
+                    label_lvl + lvl,
+                    ct.depreciate_field_name(f.name),
+                )
+                lvl += " " * indent * self.show_indent
+                for i, fld in enumerate(x for x in f.fields if hasattr(self, x.name)):
+                    fields.insert(i, fld)
                 continue
             if isinstance(f, Emph) or f in conf.emph:
                 ncol = ct.emph_field_name
@@ -1431,10 +1559,14 @@ values.
             else:
                 ncol = ct.field_name
                 vcol = ct.field_value
+            pad = max(0, 10 - len(f.name)) * " "
             fvalue = self.getfieldval(f.name)
             if isinstance(fvalue, Packet) or (f.islist and f.holds_packets and isinstance(fvalue, list)):  # noqa: E501
-                pad = max(0, 10 - len(f.name)) * " "
-                s += "%s  \\%s%s\\\n" % (label_lvl + lvl, ncol(f.name), pad)
+                s += "%s  %s%s%s%s\n" % (label_lvl + lvl,
+                                         ct.punct("\\"),
+                                         ncol(f.name),
+                                         pad,
+                                         ct.punct("\\"))
                 fvalue_gen = SetGen(
                     fvalue,
                     _iterpacket=0
@@ -1442,7 +1574,6 @@ values.
                 for fvalue in fvalue_gen:
                     s += fvalue._show_or_dump(dump=dump, indent=indent, label_lvl=label_lvl + lvl + "   |", first_call=False)  # noqa: E501
             else:
-                pad = max(0, 10 - len(f.name)) * " "
                 begn = "%s  %s%s%s " % (label_lvl + lvl,
                                         ncol(f.name),
                                         pad,
@@ -1672,38 +1803,89 @@ values.
             pp = pp.underlayer
         self.payload.dissection_done(pp)
 
+    def _command(self, json=False):
+        # type: (bool) -> List[Tuple[str, Any]]
+        """
+        Internal method used to generate command() and json()
+        """
+        f = []
+        iterator: Iterator[Tuple[str, Any]]
+        if json:
+            iterator = ((x.name, self.getfieldval(x.name)) for x in self.fields_desc)
+        else:
+            iterator = iter(self.fields.items())
+        for fn, fv in iterator:
+            fld = self.get_field(fn)
+            if isinstance(fv, (list, dict, set)) and not fv and not fld.default:
+                continue
+            if isinstance(fv, Packet):
+                if json:
+                    fv = {k: v for (k, v) in fv._command(json=True)}
+                else:
+                    fv = fv.command()
+            elif fld.islist and fld.holds_packets and isinstance(fv, list):
+                if json:
+                    fv = [
+                        {k: v for (k, v) in x}
+                        for x in map(lambda y: Packet._command(y, json=True), fv)
+                    ]
+                else:
+                    fv = "[%s]" % ",".join(map(Packet.command, fv))
+            elif fld.islist and isinstance(fv, list):
+                if json:
+                    fv = [
+                        getattr(x, 'command', lambda: repr(x))()
+                        for x in fv
+                    ]
+                else:
+                    fv = "[%s]" % ",".join(
+                        getattr(x, 'command', lambda: repr(x))()
+                        for x in fv
+                    )
+            elif isinstance(fv, FlagValue):
+                fv = int(fv)
+            elif callable(getattr(fv, 'command', None)):
+                fv = fv.command(json=json)
+            else:
+                if json:
+                    if isinstance(fv, bytes):
+                        fv = fv.decode("utf-8", errors="backslashreplace")
+                    else:
+                        fv = fld.i2h(self, fv)
+                else:
+                    fv = repr(fld.i2h(self, fv))
+            f.append((fn, fv))
+        return f
+
     def command(self):
         # type: () -> str
         """
         Returns a string representing the command you have to type to
         obtain the same packet
         """
-        f = []
-        for fn, fv in self.fields.items():
-            fld = self.get_field(fn)
-            if isinstance(fv, (list, dict, set)) and len(fv) == 0:
-                continue
-            if isinstance(fv, Packet):
-                fv = fv.command()
-            elif fld.islist and fld.holds_packets and isinstance(fv, list):
-                fv = "[%s]" % ",".join(map(Packet.command, fv))
-            elif fld.islist and isinstance(fv, list):
-                fv = "[%s]" % ", ".join(
-                    getattr(x, 'command', lambda: repr(x))()
-                    for x in fv
-                )
-            elif isinstance(fv, FlagValue):
-                fv = int(fv)
-            elif callable(getattr(fv, 'command', None)):
-                fv = fv.command()
-            else:
-                fv = repr(fld.i2h(self, fv))
-            f.append("%s=%s" % (fn, fv))
-        c = "%s(%s)" % (self.__class__.__name__, ", ".join(f))
+        c = "%s(%s)" % (
+            self.__class__.__name__,
+            ", ".join("%s=%s" % x for x in self._command())
+        )
         pc = self.payload.command()
         if pc:
             c += "/" + pc
         return c
+
+    def json(self):
+        # type: () -> str
+        """
+        Returns a JSON representing the packet.
+
+        Please note that this cannot be used for bijective usage: data loss WILL occur,
+        so it will not make sense to try to rebuild the packet from the output.
+        This must only be used for a grepping/displaying purpose.
+        """
+        dump = json.dumps({k: v for (k, v) in self._command(json=True)})
+        pc = self.payload.json()
+        if pc:
+            dump = dump[:-1] + ", \"payload\": %s}" % pc
+        return dump
 
 
 class NoPayload(Packet):
@@ -1877,6 +2059,10 @@ class NoPayload(Packet):
         # type: () -> str
         return ""
 
+    def json(self):
+        # type: () -> str
+        return ""
+
     def route(self):
         # type: () -> Tuple[None, None, None]
         return (None, None, None)
@@ -1919,7 +2105,7 @@ class Raw(Packet):
 class Padding(Raw):
     name = "Padding"
 
-    def self_build(self, field_pos_list=None):
+    def self_build(self):
         # type: (Optional[Any]) -> bytes
         return b""
 
@@ -2109,7 +2295,7 @@ def explore(layer=None):
         # Check for prompt_toolkit >= 3.0.0
         call_ptk = lambda x: cast(str, x)  # type: Callable[[Any], str]
         if _version_checker(prompt_toolkit, (3, 0)):
-            call_ptk = lambda x: x.run()  # type: ignore
+            call_ptk = lambda x: x.run()
         # 1 - Ask for layer or contrib
         btn_diag = button_dialog(
             title="Scapy v%s" % conf.version,
@@ -2428,13 +2614,25 @@ def rfc(cls, ret=False, legend=True):
     # when formatted, from its length in bits
     clsize = lambda x: 2 * x - 1  # type: Callable[[int], int]
     ident = 0  # Fields UUID
+
     # Generate packet groups
-    for f in cls.fields_desc:
-        flen = int(f.sz * 8)
+    def _iterfields() -> Iterator[Tuple[str, int]]:
+        for f in cls.fields_desc:
+            # Fancy field name
+            fname = f.name.upper().replace("_", " ")
+            fsize = int(f.sz * 8)
+            yield fname, fsize
+            # Add padding optionally
+            if isinstance(f, PadField):
+                if isinstance(f._align, tuple):
+                    pad = - cur_len % (f._align[0] * 8)
+                else:
+                    pad = - cur_len % (f._align * 8)
+                if pad:
+                    yield "padding", pad
+    for fname, flen in _iterfields():
         cur_len += flen
         ident += 1
-        # Fancy field name
-        fname = f.name.upper().replace("_", " ")
         # The field might exceed the current line or
         # take more than one line. Copy it as required
         while True:
@@ -2555,6 +2753,7 @@ def fuzz(p,  # type: _P
                 for key, val in new_default_fields.items()
             }
             q.default_fields.update(new_default_fields)
+            new_default_fields.clear()
             # add the random values of the MultipleTypeFields
             for name in multiple_type_fields:
                 fld = cast(MultipleTypeField, q.get_field(name))

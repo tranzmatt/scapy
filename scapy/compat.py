@@ -3,11 +3,12 @@
 # See https://scapy.net/ for more information
 
 """
-Python 2 and 3 link classes.
+Compatibility module to various older versions of Python
 """
 
 import base64
 import binascii
+import enum
 import struct
 import sys
 
@@ -26,6 +27,7 @@ __all__ = [
     # typing
     'DecoratorCallable',
     'Literal',
+    'Protocol',
     'Self',
     'UserDict',
     # compat
@@ -38,6 +40,7 @@ __all__ = [
     'orb',
     'plain_str',
     'raw',
+    'StrEnum',
 ]
 
 # Typing compatibility
@@ -45,7 +48,7 @@ __all__ = [
 # Note:
 # supporting typing on multiple python versions is a nightmare.
 # we provide a FakeType class to be able to use types added on
-# later Python versions (since we run mypy on 3.11), on older
+# later Python versions (since we run mypy on 3.14), on older
 # ones.
 
 
@@ -77,8 +80,12 @@ def _FakeType(name, cls=object):
 # Python 3.8 Only
 if sys.version_info >= (3, 8):
     from typing import Literal
+    from typing import Protocol
 else:
     Literal = _FakeType("Literal")
+
+    class Protocol:
+        pass
 
 
 # Python 3.9 Only
@@ -94,6 +101,15 @@ if sys.version_info >= (3, 11):
     from typing import Self
 else:
     Self = _FakeType("Self")
+
+
+# Python 3.11 Only
+if sys.version_info >= (3, 11):
+    from enum import StrEnum
+else:
+    class StrEnum(str, enum.Enum):
+        pass
+
 
 ###########
 # Python3 #

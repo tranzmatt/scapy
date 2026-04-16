@@ -11,8 +11,11 @@ import struct
 
 from scapy.compat import orb, chb
 from scapy.config import conf
-from scapy.data import DLT_BLUETOOTH_LE_LL, DLT_BLUETOOTH_LE_LL_WITH_PHDR, \
-    PPI_BTLE
+from scapy.data import (
+    DLT_BLUETOOTH_LE_LL,
+    DLT_BLUETOOTH_LE_LL_WITH_PHDR,
+    PPI_BTLE,
+)
 from scapy.packet import Packet, bind_layers
 from scapy.fields import (
     BitEnumField,
@@ -280,7 +283,7 @@ class BTLE_ADV(Packet):
                                         2: "ADV_NONCONN_IND",
                                         3: "SCAN_REQ",
                                         4: "SCAN_RSP",
-                                        5: "CONNECT_REQ",
+                                        5: "CONNECT_IND",
                                         6: "ADV_SCAN_IND"}),
         XByteField("Length", None),
     ]
@@ -538,7 +541,7 @@ class LL_VERSION_IND(Packet):
     fields_desc = [
         ByteEnumField("version", 8, BTLE_Versions),
         LEShortEnumField("company", 0, BTLE_Corp_IDs),
-        XShortField("subversion", 0)
+        XLEShortField("subversion", 0)
     ]
 
 
